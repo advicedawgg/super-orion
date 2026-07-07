@@ -1,0 +1,15 @@
+# Only index.html is the game — keep dev tooling off the website
+.git
+.gitignore
+.assetsignore
+.claude
+.playwright-mcp
+.opencode
+.wrangler
+node_modules
+AGENTS.md
+README.md
+levelcheck.js
+levelgen.template.js
+levelgen-work.js
+wrangler.jsonc

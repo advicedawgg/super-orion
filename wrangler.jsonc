@@ -1,0 +1,12 @@
+// Cloudflare Workers config — serves the game as static assets.
+// Deploy with:  npx wrangler deploy
+{
+  "name": "super-orion",
+  "compatibility_date": "2026-07-07",
+  "assets": {
+    "directory": "."
+  },
+  "routes": [
+    { "pattern": "orion.advicedawg.com", "custom_domain": true }
+  ]
+}

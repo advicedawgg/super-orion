@@ -1,0 +1,1822 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Super Orion ⭐</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⭐</text></svg>">
+<style>
+  html,body{margin:0;padding:0;height:100%;background:#1a1633;overflow:hidden;touch-action:none;}
+  #wrap{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;}
+  canvas{image-rendering:pixelated;image-rendering:crisp-edges;background:#000;box-shadow:0 0 60px rgba(0,0,0,.6);}
+  /* touch controls */
+  #touch{position:fixed;inset:0;display:none;pointer-events:none;z-index:10;}
+  .tbtn{position:absolute;bottom:4vh;width:16vmin;height:16vmin;min-width:64px;min-height:64px;
+    border-radius:50%;background:rgba(255,255,255,.14);border:3px solid rgba(255,255,255,.35);
+    color:#fff;font:bold 5vmin sans-serif;display:flex;align-items:center;justify-content:center;
+    pointer-events:auto;user-select:none;-webkit-user-select:none;}
+  .tbtn:active{background:rgba(255,255,255,.35);}
+  #tLeft{left:4vw;} #tRight{left:calc(4vw + 18vmin + 12px);} #tJump{right:4vw;width:20vmin;height:20vmin;} #tDown{right:calc(4vw + 20vmin + 12px);}
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="cv" width="960" height="540"></canvas></div>
+<div id="touch">
+  <div class="tbtn" id="tLeft">◀</div>
+  <div class="tbtn" id="tRight">▶</div>
+  <div class="tbtn" id="tJump">A</div>
+  <div class="tbtn" id="tDown">▼</div>
+</div>
+<script>
+'use strict';
+/* ============================================================
+   SUPER ORION ⭐  — a totally legit adventure
+   A loving, silly, original 2D platformer for Orion.
+   ============================================================ */
+
+const W = 960, H = 540, TILE = 32;
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+
+function fitCanvas(){
+  const s = Math.min(window.innerWidth / W, window.innerHeight / H);
+  cv.style.width  = Math.floor(W * s) + 'px';
+  cv.style.height = Math.floor(H * s) + 'px';
+}
+window.addEventListener('resize', fitCanvas); fitCanvas();
+
+/* ================= INPUT ================= */
+const keys = {};       // held keys by code
+let justDown = {};     // pressed this frame
+const KEYMAP = {
+  ArrowLeft:'left', KeyA:'left',
+  ArrowRight:'right', KeyD:'right',
+  ArrowUp:'jump', KeyW:'jump', Space:'jump',
+  ArrowDown:'down', KeyS:'down',
+  Enter:'enter', KeyP:'pause', KeyM:'mute', KeyR:'restart'
+};
+const GAME_CODES = new Set(Object.keys(KEYMAP));
+let typedBuffer = '';            // for ORION code
+let konamiIdx = 0;
+const KONAMI = ['ArrowUp','ArrowUp','ArrowDown','ArrowDown','ArrowLeft','ArrowRight','ArrowLeft','ArrowRight','KeyB','KeyA'];
+
+window.addEventListener('keydown', e=>{
+  if (GAME_CODES.has(e.code)) e.preventDefault();
+  initAudio();
+  if (!e.repeat){
+    // secret word detector (first, so the R in "orion" isn't read as a restart)
+    if (e.key && e.key.length === 1){
+      typedBuffer = (typedBuffer + e.key.toLowerCase()).slice(-10);
+      if (typedBuffer.endsWith('orion')) triggerRainbow();
+      if (typedBuffer.endsWith('taco'))  triggerFreeTaco();
+    }
+    const a = KEYMAP[e.code];
+    if (a && !(a === 'restart' && typedBuffer.endsWith('or'))){ keys[a] = true; justDown[a] = true; }
+    // konami detector (KMP failure transition: Up,Up prefix survives extra Ups)
+    if (e.code === KONAMI[konamiIdx]){ konamiIdx++; if (konamiIdx >= KONAMI.length){ konamiIdx = 0; triggerBigHead(); } }
+    else konamiIdx = (e.code === 'ArrowUp') ? (konamiIdx === 2 ? 2 : 1) : 0;
+  }
+});
+window.addEventListener('keyup', e=>{
+  const a = KEYMAP[e.code];
+  if (a) keys[a] = false;
+});
+// don't leave keys latched when focus leaves the game (Alt-Tab mid-run = Orion walks into a pit)
+window.addEventListener('blur', ()=>{ for (const k in keys) keys[k] = false; });
+document.addEventListener('visibilitychange', ()=>{ if (document.hidden) for (const k in keys) keys[k] = false; });
+
+// touch controls
+if ('ontouchstart' in window){
+  document.getElementById('touch').style.display = 'block';
+  const bind = (id, action)=>{
+    const el = document.getElementById(id);
+    el.addEventListener('pointerdown', e=>{ e.preventDefault(); initAudio(); keys[action]=true; justDown[action]=true; }, {passive:false});
+    el.addEventListener('pointerup',   e=>{ e.preventDefault(); keys[action]=false; }, {passive:false});
+    el.addEventListener('pointercancel', ()=>{ keys[action]=false; });
+    el.addEventListener('pointerleave',  ()=>{ keys[action]=false; });
+  };
+  bind('tLeft','left'); bind('tRight','right'); bind('tJump','jump'); bind('tDown','down');
+  cv.addEventListener('pointerdown', ()=>{ initAudio(); justDown.enter = true; });
+}
+
+/* ================= AUDIO ================= */
+let AC = null, masterGain = null, musicGain = null, muted = false;
+function initAudio(){
+  if (AC) { if (AC.state === 'suspended') AC.resume(); return; }
+  try{
+    AC = new (window.AudioContext || window.webkitAudioContext)();
+    masterGain = AC.createGain(); masterGain.gain.value = 0.55; masterGain.connect(AC.destination);
+    musicGain = AC.createGain(); musicGain.gain.value = 0.5; musicGain.connect(masterGain);
+  }catch(err){ AC = null; }
+}
+function tone(freq, dur, type='square', vol=0.12, slideTo=null, delay=0){
+  if (!AC || muted) return;
+  const t0 = AC.currentTime + delay;
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.type = type; o.frequency.setValueAtTime(freq, t0);
+  if (slideTo) o.frequency.exponentialRampToValueAtTime(Math.max(slideTo,1), t0 + dur);
+  g.gain.setValueAtTime(vol, t0);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  o.connect(g); g.connect(masterGain);
+  o.start(t0); o.stop(t0 + dur + 0.02);
+}
+function noiseBurst(dur=0.15, vol=0.1, delay=0){
+  if (!AC || muted) return;
+  const t0 = AC.currentTime + delay;
+  const len = Math.max(1, Math.floor(AC.sampleRate * dur));
+  const buf = AC.createBuffer(1, len, AC.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i=0;i<len;i++) d[i] = (Math.random()*2-1) * (1 - i/len);
+  const src = AC.createBufferSource(); src.buffer = buf;
+  const g = AC.createGain(); g.gain.setValueAtTime(vol, t0);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0+dur);
+  src.connect(g); g.connect(masterGain); src.start(t0);
+}
+const midi = m => 440 * Math.pow(2, (m - 69) / 12);
+const SFX = {
+  jump(){ tone(300, 0.13, 'square', 0.10, 540); },
+  coin(){ tone(midi(83), 0.07, 'square', 0.10); tone(midi(88), 0.16, 'square', 0.10, null, 0.07); },
+  stomp(){ tone(220, 0.12, 'triangle', 0.16, 70); noiseBurst(0.08, 0.06); },
+  spring(){ tone(150, 0.25, 'square', 0.12, 760); },
+  brick(){ noiseBurst(0.15, 0.12); tone(120, 0.1, 'square', 0.08, 60); },
+  bump(){ tone(140, 0.08, 'square', 0.1, 100); },
+  taco(){ [60,64,67,72,76].forEach((m,i)=>tone(midi(m), 0.1, 'square', 0.1, null, i*0.06)); },
+  oneup(){ [64,67,72,76,79,84].forEach((m,i)=>tone(midi(m), 0.09, 'square', 0.1, null, i*0.07)); },
+  hurt(){ tone(220, 0.25, 'sawtooth', 0.12, 80); },
+  die(){ [72,67,64,60,55,48].forEach((m,i)=>tone(midi(m), 0.13, 'triangle', 0.12, null, i*0.09)); },
+  flag(){ [60,64,67,72,76,79,84].forEach((m,i)=>tone(midi(m), 0.12, 'square', 0.11, null, i*0.08)); tone(midi(88), 0.5, 'square', 0.11, null, 0.6); },
+  pipe(){ tone(400, 0.3, 'square', 0.1, 90); },
+  toot(){ tone(95, 0.28, 'square', 0.14, 55); noiseBurst(0.2, 0.04, 0.02); },
+  dance(){ tone(midi([72,76,79,84][Math.floor(Math.random()*4)]), 0.09, 'square', 0.06); },
+  boing(){ tone(180, 0.12, 'square', 0.1, 420); },
+  pop(){ tone(660, 0.06, 'square', 0.08, 880); },
+};
+
+/* ---- music sequencer (original bouncy tune) ---- */
+const LEAD = [
+  72,76,79,76, 81,79,76,72,  74,77,81,77, 83,81,77,74,
+  76,79,83,79, 84,83,79,76,  79,77,76,74, 72,null,67,null,
+  72,76,79,76, 81,79,76,72,  74,77,81,77, 83,81,77,74,
+  84,83,81,79, 77,76,74,72,  74,76,77,79, 72,null,null,null,
+];
+const BASS = [
+  48,null,55,null,48,null,55,null, 53,null,60,null,53,null,60,null,
+  52,null,59,null,52,null,59,null, 55,null,55,null,48,null,48,null,
+  48,null,55,null,48,null,55,null, 53,null,60,null,53,null,60,null,
+  53,null,60,null,52,null,59,null, 48,null,55,null,48,null,null,null,
+];
+const music = { playing:false, step:0, nextTime:0, bpm:150, transpose:0, wave:'square' };
+function startMusic(cfg){
+  music.bpm = cfg.bpm; music.transpose = cfg.transpose; music.wave = cfg.wave;
+  music.step = 0; music.playing = true;
+  if (AC) music.nextTime = AC.currentTime + 0.1;
+}
+function stopMusic(){ music.playing = false; }
+function tickMusic(){
+  if (!AC || !music.playing || muted) return;
+  const stepDur = 60 / music.bpm / 2; // eighth notes
+  while (music.nextTime < AC.currentTime + 0.2){
+    const i = music.step % LEAD.length;
+    const L = LEAD[i], B = BASS[i];
+    const t0 = music.nextTime;
+    if (L != null) playNote(midi(L + music.transpose), stepDur*0.9, music.wave, 0.045, t0);
+    if (B != null) playNote(midi(B + music.transpose), stepDur*1.7, 'triangle', 0.07, t0);
+    music.nextTime += stepDur;
+    music.step++;
+  }
+}
+function playNote(freq, dur, type, vol, when){
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.type = type; o.frequency.value = freq;
+  g.gain.setValueAtTime(vol, when);
+  g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+  o.connect(g); g.connect(musicGain);
+  o.start(when); o.stop(when + dur + 0.02);
+}
+
+/* ================= PIXEL SPRITES ================= */
+const PAL = {
+  C:'#2b6fd4', // cap blue
+  Y:'#ffd23e', // star yellow
+  H:'#4a2c14', // hair
+  F:'#ffd9b3', // skin
+  e:'#222222', // eye
+  m:'#b35900', // mouth
+  O:'#ff7a1a', // shirt orange
+  B:'#2546a0', // pants
+  W:'#f4f4f4', // shoes
+  g:'#3c8527', // grumblin body
+  G:'#2a611b', // grumblin dark
+  w:'#ffffff', // white
+  k:'#1d1d1d', // black
+  p:'#c46fd4', // flapjack purple
+  P:'#8a3f9e', // flapjack dark
+  t:'#f5c542', // taco shell
+  T:'#7bc043', // taco lettuce
+  r:'#d44a2b', // taco tomato
+};
+// 12 wide x 16 tall frames for Orion
+const ORION_FRAMES = {
+  idle:[
+  '  CCCCCC    ',
+  ' CCCCCCCC   ',
+  ' CCYYCCCC   ',
+  ' HFFFFFFH   ',
+  ' HFeFFeFH   ',
+  ' HFFFFFFH   ',
+  '  FFmmFF    ',
+  '  OOOOOO    ',
+  ' FOOYYOOF   ',
+  ' FOOYYOOF   ',
+  '  OOOOOO    ',
+  '  BBBBBB    ',
+  '  BB  BB    ',
+  '  BB  BB    ',
+  ' WWW  WWW   ',
+  ' WWW  WWW   '],
+  run1:[
+  '  CCCCCC    ',
+  ' CCCCCCCC   ',
+  ' CCYYCCCC   ',
+  ' HFFFFFFH   ',
+  ' HFeFFeFH   ',
+  ' HFFFFFFH   ',
+  '  FFmmFF    ',
+  '  OOOOOO    ',
+  '  OOYYOOFF  ',
+  ' FOOYYOO    ',
+  '  OOOOOO    ',
+  '  BBBBBB    ',
+  '   BBBB     ',
+  '  BB  BB    ',
+  ' WWW   WWW  ',
+  'WWW     WWW '],
+  run2:[
+  '  CCCCCC    ',
+  ' CCCCCCCC   ',
+  ' CCYYCCCC   ',
+  ' HFFFFFFH   ',
+  ' HFeFFeFH   ',
+  ' HFFFFFFH   ',
+  '  FFmmFF    ',
+  '  OOOOOO    ',
+  ' FOOYYOO    ',
+  '  OOYYOOFF  ',
+  '  OOOOOO    ',
+  '  BBBBBB    ',
+  '   BBBB     ',
+  '   BBBB     ',
+  '  WWWWWW    ',
+  '  WWWWWW    '],
+  jump:[
+  '  CCCCCC    ',
+  ' CCCCCCCC   ',
+  ' CCYYCCCC   ',
+  ' HFFFFFFH   ',
+  ' HFeFFeFH   ',
+  ' HFFFFFFH   ',
+  'F FFmmFF F  ',
+  'F OOOOOO F  ',
+  'FOOOYYOOOF  ',
+  ' OOOYYOOO   ',
+  '  OOOOOO    ',
+  '  BBBBBB    ',
+  '  BB  BB    ',
+  ' WBB  BBW   ',
+  ' WWW  WWW   ',
+  '            '],
+  duck:[
+  '            ',
+  '            ',
+  '            ',
+  '            ',
+  '  CCCCCC    ',
+  ' CCCCCCCC   ',
+  ' CCYYCCCC   ',
+  ' HFFFFFFH   ',
+  ' HFeFFeFH   ',
+  '  FFmmFF    ',
+  '  OOOOOO    ',
+  ' FOOYYOOF   ',
+  '  OOOOOO    ',
+  '  BBBBBB    ',
+  ' WWW  WWW   ',
+  ' WWW  WWW   '],
+  dance1:[
+  'F CCCCCC    ',
+  'FCCCCCCCC   ',
+  ' CCYYCCCC   ',
+  ' HFFFFFFH   ',
+  ' HFeFFeFH   ',
+  ' HFFFFFFH   ',
+  '  FFmmFF F  ',
+  ' FOOOOOOF   ',
+  'F OOYYOO    ',
+  '  OOYYOO    ',
+  '  OOOOOO    ',
+  '  BBBBBB    ',
+  '  BB  BB    ',
+  '  BB   BB   ',
+  ' WWW   WWW  ',
+  ' WWW   WWW  '],
+  dance2:[
+  '    CCCCCC F',
+  '   CCCCCCCCF',
+  '   CCYYCCCC ',
+  '   HFFFFFFH ',
+  '   HFeFFeFH ',
+  '   HFFFFFFH ',
+  ' F  FFmmFF  ',
+  '   FOOOOOOF ',
+  '    OOYYOO F',
+  '    OOYYOO  ',
+  '    OOOOOO  ',
+  '    BBBBBB  ',
+  '    BB  BB  ',
+  '   BB   BB  ',
+  '  WWW   WWW ',
+  '  WWW   WWW '],
+};
+const GRUMBLIN_FRAMES = {
+  walk1:[
+  '   gggggg   ',
+  '  gggggggg  ',
+  ' gGwwggwwGg ',
+  ' gGwkggkwGg ',
+  ' gggggggggg ',
+  ' ggGGGGGGgg ',
+  ' gggggggggg ',
+  '  gggggggg  ',
+  '  GGG  GGG  ',
+  ' GGG    GGG '],
+  walk2:[
+  '   gggggg   ',
+  '  gggggggg  ',
+  ' gGwwggwwGg ',
+  ' gGkwggwkGg ',
+  ' gggggggggg ',
+  ' ggGGGGGGgg ',
+  ' gggggggggg ',
+  '  gggggggg  ',
+  '   GGGGGG   ',
+  '  GGG  GGG  '],
+  squash:[
+  '            ',
+  '            ',
+  '            ',
+  '            ',
+  '            ',
+  '  gggggggg  ',
+  ' gGkxggxkGg '.replace(/x/g,'k'),
+  ' gggggggggg ',
+  ' GGGGGGGGGG ',
+  '            '],
+};
+const FLAPJACK_FRAMES = {
+  fly1:[
+  ' ww      ww ',
+  'wwww    wwww',
+  ' wwppppppww ',
+  '  pPwppwPp  ',
+  '  pPkppkPp  ',
+  '  pppppppp  ',
+  '   pppppp   ',
+  '    p  p    '],
+  fly2:[
+  '            ',
+  '            ',
+  '  wwpppppww '.replace('w','w'),
+  ' wwPwppwPww ',
+  'ww pkppkp ww',
+  '   pppppp   ',
+  '   pppppp   ',
+  '    p  p    '],
+};
+const TACO_FRAME = [
+  '   tttttt   ',
+  '  ttTTTTtt  ',
+  ' ttTrTTrTtt ',
+  ' tTTTrTTTTt ',
+  ' tttttttttt ',
+  '  tttttttt  ',
+];
+
+function renderFrame(rows, scale, bigHead=false){
+  const w = rows[0].length, h = rows.length;
+  const c = document.createElement('canvas');
+  c.width = w*scale + (bigHead? w*scale : 0);
+  c.height = h*scale + (bigHead? 7*scale : 0);
+  const x = c.getContext('2d');
+  const headRows = 7; // rows 0-6 = head
+  const drawPx = (col,row,px,py,s)=>{
+    const ch = rows[row][col];
+    if (ch && ch !== ' ' && PAL[ch]){ x.fillStyle = PAL[ch]; x.fillRect(px, py, s, s); }
+  };
+  if (!bigHead){
+    for (let r=0;r<h;r++) for (let cI=0;cI<w;cI++) drawPx(cI,r, cI*scale, r*scale, scale);
+  } else {
+    // body drawn at bottom, normal size, centered
+    const bodyOffX = Math.floor(w*scale/2);
+    for (let r=headRows;r<h;r++) for (let cI=0;cI<w;cI++) drawPx(cI,r, bodyOffX + cI*scale, (r+7)*scale, scale);
+    // head drawn 2x on top, centered over body
+    const headW = w*scale*2;
+    const headOffX = Math.floor((c.width - headW)/2);
+    for (let r=0;r<headRows;r++) for (let cI=0;cI<w;cI++) drawPx(cI,r, headOffX + cI*scale*2, r*scale*2, scale*2);
+  }
+  return c;
+}
+const SCALE = 2;
+const sprites = { orion:{}, orionBig:{}, grumblin:{}, flapjack:{}, taco:null };
+for (const k in ORION_FRAMES){ sprites.orion[k] = renderFrame(ORION_FRAMES[k], SCALE); sprites.orionBig[k] = renderFrame(ORION_FRAMES[k], SCALE, true); }
+for (const k in GRUMBLIN_FRAMES) sprites.grumblin[k] = renderFrame(GRUMBLIN_FRAMES[k], SCALE);
+for (const k in FLAPJACK_FRAMES) sprites.flapjack[k] = renderFrame(FLAPJACK_FRAMES[k], SCALE);
+sprites.taco = renderFrame(TACO_FRAME, 3);
+
+/* ================= LEVELS =================
+   Legend:
+   '#' grass/cloud top   'x' dirt/stone      '=' brick (breakable)
+   '?' ? block (star)    'T' ? block (taco)  'U' ? block (1-UP)
+   '*' invisible 1-UP block                  'B' used block
+   'o' star (coin)       '^' spikes          'S' spring
+   '(' ')' pipe top      '[' ']' pipe body   'D' 'd' SECRET pipe top
+   'E' grumblin          'V' flapjack        'F' flag
+   'p' player spawn      ',' decoration
+============================================== */
+const LEVELS = [
+{
+  name:'Grassy Greens', sub:'World 1-1',
+  palette:{ skyTop:'#7ec4f8', skyBot:'#d9f4ff', ground:'#a9703f', groundTop:'#58c443', brick:'#c75b39',
+            hill:'#7ed27a', hill2:'#5cb85c', deco:'grass', bgStars:false },
+  music:{ bpm:150, transpose:0, wave:'square' },
+  main:[
+'                                                                                                                                    ',
+'                                                                                                                                    ',
+'                                                                                                                                    ',
+'                                                                                                                                    ',
+'                                                                                                                                    ',
+'                                                                                                                                    ',
+'                                                                                                                                    ',
+'                                 oo                                                                                                 ',
+'                                                                                              o o                                  ',
+'                                                                                 ooooo       o   o                                 ',
+'                                                                                             o   o                                 ',
+'          ?o?                 =?=T                                  =  *      ==o=o=o==     o     o                                 ',
+'                                            ,                                                                                      ',
+'   p              ()       E        ,  xx  E    ,      Dd   ooo        ,    ,             ,        ,      E   E  ,                 ',
+'        ,    ,    []      xxx      xxxxxxx           E [] E       E         ,  E         S  xx          ,       xx   ,    F        ',
+'########################  ###############  ########################   #################################  ###############;##########'.replace(/;/g,'#'),
+'xxxxxxxxxxxxxxxxxxxxxxxx  xxxxxxxxxxxxxxx  xxxxxxxxxxxxxxxxxxxxxxxx   xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx  xxxxxxxxxxxxxxxxxxxxxxxxx',
+  ],
+  bonus:[
+'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+'x                            x',
+'x                            x',
+'x      ooooooooooooo         x',
+'x                            x',
+'x                            x',
+'x                            x',
+'x     BBBBBBBBBBBBBB         x',
+'x  ooo              ooo  Dd  x',
+'x                        []  x',
+'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+  ],
+  bonusSpawn:[3,10],
+  mainReturn:[55,13],
+},
+{
+  name:'Cookie Caves', sub:'World 1-2',
+  palette:{ skyTop:'#171331', skyBot:'#322a5e', ground:'#5d5470', groundTop:'#8a7fa8', brick:'#7a5b8f',
+            hill:'#241e44', hill2:'#2e2752', deco:'crystal', bgStars:true },
+  music:{ bpm:118, transpose:-12, wave:'triangle' },
+  main:[
+'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+'                                                                                                                      ',
+'                                                                                                                      ',
+'                                                                                                                      ',
+'                                                                                                                      ',
+'                                                                                                                      ',
+'                                                                                                                      ',
+'                                                                                                                      ',
+'                                 ooooooo                                                                              ',
+'                                #########                                                                             ',
+'                    ?T?                                =====   o o o                                                  ',
+'                                                                                   o o o                              ',
+'         ooo                ,         V    ,        ==     ==              =     V        ,   o o o     ,             ',
+'    p           ^^^       E S        ,   E   E  ,        ,       ^^=^^    ,  E       E       ,     ,  E       F       ',
+'#####################################################################################################################;'.replace(/;/g,'#'),
+'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+  ],
+  bonus:null, bonusSpawn:null, mainReturn:null,
+},
+{
+  name:'Sky Snack Summit', sub:'World 1-3',
+  palette:{ skyTop:'#5aa9e8', skyBot:'#ffe7b3', ground:'#e8eef8', groundTop:'#ffffff', brick:'#f2b66d',
+            hill:'#bcdcf5', hill2:'#a5cdf0', deco:'star', bgStars:false },
+  music:{ bpm:168, transpose:4, wave:'square' },
+  main:[
+'                                                                                                                              ',
+'                                                                                                                              ',
+'                                                                                                                              ',
+'                                            U                                                                                 ',
+'                                                                                                                              ',
+'                                       o o o o                                                                                ',
+'                                                                                                                              ',
+'                                      ########                                                                                ',
+'                                      V                                                                                       ',
+'                                                                          V          ooo                                      ',
+'                                                  ####            ooo    ####       ####                                      ',
+'                ####       ?o?T                                                                                               ',
+'                                                                                             o                                ',
+'           ####       ####        ES         ####,    ######    E  E ####      ####      =   = o =   ,                        ',
+'    p           ,            E   ,        ,                ,                              ,      ,  E     ,   F               ',
+'############   ,    ,        ###############          ,         #############                  ###############################',
+'xxxxxxxxxxxx                 xxxxxxxxxxxxxxx                     xxxxxxxxxxxxx                  xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+  ],
+  bonus:null, bonusSpawn:null, mainReturn:null,
+},
+{
+  name:'Soda Springs', sub:'World 1-4',
+  palette:{ skyTop:'#46c8b2', skyBot:'#eafff2', ground:'#8a4e2e', groundTop:'#7fe06a', brick:'#e8709e',
+            hill:'#8fe3c8', hill2:'#6fd0b0', deco:'crystal', bgStars:false },
+  music:{ bpm:160, transpose:7, wave:'square' },
+  main:[
+'                                                                                                                              ',
+'                                                                                                                              ',
+'                                                                                                                              ',
+'                                                                                                                              ',
+'                                                                                                                              ',
+'                                                                                                                              ',
+'                                                   oo                                                                         ',
+'         ooo                                      ####                                          o                             ',
+'        #####          o                                                                      o   o                           ',
+'                                             oo                                                                               ',
+'                                            ####                                            o       o                         ',
+'                      ?o?                                 T           =?=                              V                      ',
+'                                    V   ==                                                                                    ',
+'                          ooo                                     oo              Dd                        o                 ',
+'   p  S ,           E         ,        E       ,                   ,  E     E     []            S    E    ,    E    ,   F     ',
+'##############  ###############   ###########################   ##########################   #################################',
+'xxxxxxxxxxxxxx  xxxxxxxxxxxxxxx   xxxxxxxxxxxxxxxxxxxxxxxxxxx   xxxxxxxxxxxxxxxxxxxxxxxxxx   xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+  ],
+  bonus:[
+'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+'x                            x',
+'x   ooo    ooooo    ooo      x',
+'x                            x',
+'x    o o o o o o o o o o     x',
+'x                            x',
+'x                            x',
+'x                            x',
+'x                        Dd  x',
+'x   S      S      S      []  x',
+'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+  ],
+  bonusSpawn:[3,10],
+  mainReturn:[82,13],
+},
+{
+  name:'Star Fortress', sub:'World 1-5',
+  palette:{ skyTop:'#0e0b2e', skyBot:'#31255e', ground:'#5a5f8c', groundTop:'#8b91c4', brick:'#c9973f',
+            hill:'#1c1740', hill2:'#262052', deco:'star', bgStars:true },
+  music:{ bpm:172, transpose:5, wave:'square' },
+  main:[
+'                                                                                                                                  ',
+'                                                                                                                                  ',
+'                                                                                                                                  ',
+'                                                                                                                                  ',
+'                                                                                                                                  ',
+'                                                                                                                                  ',
+'                                                                       o o o                                                      ',
+'                                                                        E                                                         ',
+'             o                                                        =======                                                     ',
+'                                             V                                                                                    ',
+'                                          oo                                                                                      ',
+'            ?o?             =T=          ####             U                         *                           o   ??            ',
+'                                    oo          oo                                                 ==       o                     ',
+'      oo                           ####        ####                             o                       o                         ',
+'   p     E      , ^^^     E     ,                        ,    E     E  ,     S        ,        ,  ^^^^    E     E       ,   F     ',
+'##################################                    ####################################   #####################################',
+'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx                    xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx   xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+  ],
+  bonus:null, bonusSpawn:null, mainReturn:null,
+},
+{
+  name:'Cotton Candy Clouds', sub:'World 1-6',
+  palette:{ skyTop:'#ff9ec4', skyBot:'#ffe8f2', ground:'#ffd1dc', groundTop:'#ffffff', brick:'#ff7eb3',
+            hill:'#ffbed4', hill2:'#ffb6c1', deco:'star', bgStars:false },
+  music:{ bpm:162, transpose:3, wave:'triangle' },
+  main:[
+'                                                                                                                        ',
+'                                                                                                                        ',
+'                                                                                                                        ',
+'                                                                                                                        ',
+'                                                                                                                        ',
+'                                                                                                                        ',
+'                                                                                                                        ',
+'                                         oo                                                                             ',
+'                       ooo                                      oo                     oo                               ',
+'                                         =S                     =S                                                      ',
+'                       ===                                                             == V                             ',
+'        ?o?              T                    ?o?                       U                       ?o?                     ',
+'      o        o                 o                    o                                                  o  o           ',
+'                              o                    o    d              o                                                ',
+'   p , , E    ,  ,          E      S              E     D                 E       S               E             F       ',
+'###################   ##################   ####################    ###################    ##############################',
+'xxxxxxxxxxxxxxxxxxx   xxxxxxxxxxxxxxxxxx   xxxxxxxxxxxxxxxxxxxx    xxxxxxxxxxxxxxxxxxx    xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+  ],
+  bonus:[
+'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+'x                            x',
+'x   o   ooooooo   o   o      x',
+'x                            x',
+'x                            x',
+'x                            x',
+'x                            x',
+'x                            x',
+'x                        Dd  x',
+'x   S      S      S      []  x',
+'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+  ],
+  bonusSpawn:[3,10],
+  mainReturn:[56,13],
+},
+];
+
+/* ================= FUNNY TEXT BANKS ================= */
+const STOMP_QUIPS = ['BONK!','Boop!','Yeet!','Squish!','Sorry, not sorry!','Outta my way!','Bonk-a-donk!','Get bonked!'];
+const PIT_QUIPS = ['Orion discovered gravity!','He\'s... exploring downward.','The floor was a suggestion.','Gravity: 1, Orion: 0','That hole was rude.','Note to self: holes go down.'];
+const PAUSE_TIPS = [
+  'Tip: Jumping makes you go up.',
+  'Tip: Stars are shiny. Collect them.',
+  'Tip: Orion is the coolest.',
+  'Tip: Enemies hate being jumped on.',
+  'Tip: Tacos make you fast. True story.',
+  'Tip: Try typing O-R-I-O-N...',
+  'Tip: The flag means you win. Touch it.',
+  'Tip: Snack breaks improve gaming skill.',
+  'Tip: Pressing pause pauses the game. Wow.',
+  'Tip: Some pipes hide secrets. Press DOWN!',
+];
+const SPRING_QUIPS = ['WHEEE!','TO THE MOON!','So bouncy!','Boing physics!'];
+const HURT_QUIPS = ['Ouchie!','Rude!','I felt that.','Hey!!'];
+const DANCE_LINES = ['Dance break!','Nobody\'s watching, right?','Got the moves!','Wiggle wiggle!'];
+
+/* ================= GAME STATE ================= */
+const G = {
+  state:'TITLE',       // TITLE, STARTCARD, PLAY, PAUSE, CLEAR, GAMEOVER, WIN, DYING, PIPE
+  levelIdx:0,
+  grid:null, gridW:0, gridH:0,         // active map
+  mainGrid:null, bonusGrid:null,
+  inBonus:false,
+  enemies:[], particles:[], texts:[], pickups:[],
+  camX:0, camY:0, camShake:0,
+  score:0, stars:0, totalStars:0, lives:5, hearts:3,
+  flagX:0, flagY:0,
+  stateTimer:0,
+  pauseTip:'',
+  stats:{ bonks:0, stars:0, deaths:0, tacos:0, secrets:0, toots:0 },
+  // easter egg flags
+  bigHead:false, rainbow:false,
+  msgTimer:0, msgText:'',
+  fireworkTimer:0,
+  pipeAnim:null,
+  time:0,
+};
+const player = {
+  x:0, y:0, w:20, h:30, vx:0, vy:0,
+  onGround:false, facing:1, anim:0, jumping:false,
+  coyote:0, jumpBuf:0,
+  inv:0,            // invincibility after hurt
+  tacoTimer:0,
+  // easter egg trackers
+  idleTime:0, dancing:false,
+  jumpChain:0, lastJumpT:-99, boingCooldown:0,
+  wallPush:0, wallCooldown:0,
+  duckCount:0, duckWindow:0, tootCooldown:0, ducking:false, downHeld:false,
+  stompChain:0,
+  bubble:'', bubbleT:0,
+};
+
+function say(text, dur=2){ player.bubble = text; player.bubbleT = dur; }
+function announce(text, dur=2.5){ G.msgText = text; G.msgTimer = dur; }
+function addText(x,y,text,color='#fff',size=14,dur=1){ G.texts.push({x,y,text,color,size,t:dur,dur}); }
+function addScore(n,x,y){ G.score += n; if (x!==undefined) addText(x,y,'+'+n,'#fff',12,0.8); }
+
+/* easter egg triggers callable from input */
+function triggerRainbow(){
+  G.rainbow = !G.rainbow;
+  if (G.state === 'PLAY' || G.state === 'TITLE'){
+    announce(G.rainbow ? '🌈 RAINBOW ORION ACTIVATED! 🌈' : 'Rainbow mode off. Aww.');
+    SFX.oneup();
+    confetti(player.x + player.w/2 - G.camX, player.y - G.camY, 40);
+  }
+}
+function triggerBigHead(){
+  G.bigHead = !G.bigHead;
+  announce(G.bigHead ? 'BIG BRAIN MODE!' : 'Brain returned to normal size.');
+  SFX.taco();
+}
+function triggerFreeTaco(){
+  if (G.state !== 'PLAY') return;
+  player.tacoTimer = 8; G.stats.tacos++;
+  announce('FREE TACO! How did you know?!');
+  SFX.taco();
+}
+
+/* particles */
+function confetti(sx, sy, n=30){
+  const colors = ['#ff5252','#ffd23e','#4caf50','#42a5f5','#ab47bc','#ff9800'];
+  for (let i=0;i<n;i++){
+    G.particles.push({
+      x: sx + G.camX, y: sy + G.camY,
+      vx: (Math.random()-0.5)*420, vy: -Math.random()*420 - 80,
+      life: 1.2 + Math.random()*0.8, t:0, grav: 600,
+      color: colors[Math.floor(Math.random()*colors.length)], size: 3+Math.random()*4, flutter: Math.random()*6,
+    });
+  }
+}
+function puff(x,y,color='#cccccc',n=8,spread=80){
+  for (let i=0;i<n;i++){
+    G.particles.push({ x, y, vx:(Math.random()-0.5)*spread, vy:(Math.random()-0.5)*spread - 30,
+      life:0.5+Math.random()*0.3, t:0, grav:60, color, size:2+Math.random()*3, flutter:0 });
+  }
+}
+function sparkle(x,y,color='#ffd23e'){
+  G.particles.push({ x, y, vx:(Math.random()-0.5)*40, vy:-20-Math.random()*40,
+    life:0.6, t:0, grav:-20, color, size:2, flutter:0, star:true });
+}
+
+/* ================= LEVEL LOADING ================= */
+function parseMap(rows){
+  const w = Math.max(...rows.map(r=>r.length));
+  const grid = rows.map(r => (r + ' '.repeat(w - r.length)).split(''));
+  return { grid, w, h: rows.length };
+}
+function loadLevel(idx, keepScore=true){
+  if (keepScore) G.levelStartScore = G.score;      // fresh entry: snapshot carried-forward score
+  else G.score = G.levelStartScore || 0;           // retry: discard score from the aborted attempt
+  const L = LEVELS[idx];
+  G.levelIdx = idx;
+  const m = parseMap(L.main);
+  G.mainGrid = m.grid;
+  G.bonusGrid = L.bonus ? parseMap(L.bonus).grid : null;
+  G.inBonus = false;
+  G.grid = G.mainGrid; G.gridW = m.w; G.gridH = m.h;
+  G.enemies = []; G.particles = []; G.texts = []; G.pickups = [];
+  G.stars = 0; G.totalStars = 0; G.hearts = 3;
+  G.camX = 0; G.camY = 0;
+  player.vx = 0; player.vy = 0; player.inv = 0; player.tacoTimer = 0;
+  player.idleTime = 0; player.dancing = false; player.stompChain = 0;
+  G.msgTimer = 0; G.msgText = ''; G.camShake = 0;
+  player.bubble = ''; player.bubbleT = 0; player.jumping = false;
+  // scan map
+  const scan = (grid)=>{
+    for (let r=0;r<grid.length;r++) for (let c=0;c<grid[r].length;c++){
+      const ch = grid[r][c];
+      if (ch === 'p'){ player.x = c*TILE+6; player.y = (r+1)*TILE - player.h; grid[r][c]=' '; }
+      else if (ch === 'E'){ G.enemies.push(makeGrumblin(c*TILE+3, (r+1)*TILE)); grid[r][c]=' '; }
+      else if (ch === 'V'){ G.enemies.push(makeFlapjack(c*TILE+4, r*TILE+8)); grid[r][c]=' '; }
+      else if (ch === 'o' || ch === '?'){ G.totalStars++; }   // '?' blocks pop a star too
+      else if (ch === 'F'){ G.flagX = c; G.flagY = r; }
+    }
+  };
+  scan(G.mainGrid);
+  if (G.bonusGrid){ // count bonus stars too (enemies not allowed in bonus)
+    for (const row of G.bonusGrid) for (const ch of row) if (ch === 'o' || ch === '?') G.totalStars++;
+  }
+  startMusic(L.music);
+  G.state = 'STARTCARD'; G.stateTimer = 1.6;
+}
+function makeGrumblin(x, footY){
+  return { kind:'grumblin', x, y: footY - 20, w:22, h:20, vx:-40, vy:0, dir:-1, squash:0, dead:false, animT:Math.random() };
+}
+function makeFlapjack(x, y){
+  return { kind:'flapjack', x, y, w:22, h:14, baseY:y, t:Math.random()*6, vx:-50, dir:-1, squash:0, dead:false, range:90, startX:x };
+}
+
+/* ================= TILE HELPERS ================= */
+const SOLID = new Set(['#','x','=','?','T','U','B','(',')','[',']','D','d','S']);
+function tileAt(c, r){
+  if (c < 0 || c >= G.gridW) return 'x';     // walls at level edges
+  if (r < 0) return ' ';
+  if (r >= G.gridH) return ' ';
+  return G.grid[r][c] || ' ';
+}
+function isSolid(ch){ return SOLID.has(ch); }
+function setTile(c, r, ch){ if (r>=0 && r<G.gridH && c>=0 && c<G.gridW) G.grid[r][c] = ch; }
+
+/* ================= PHYSICS ================= */
+const GRAV = 2000, MOVE_ACC = 1900, MAX_SPD = 260, FRICTION = 2400, AIR_FRICTION = 300;
+const JUMP_V = -760, SPRING_V = -920, COYOTE = 0.1, JBUF = 0.12;   // -760 clears 4-tile block stacks (rise ~4.5 tiles); -650 couldn't (3.3)
+
+function moveAndCollide(ent, dt, isPlayer){
+  const bumped = [];
+  // sub-step so a clamped/slow frame can never move more than half a tile at once (no tunneling)
+  const steps = Math.max(1, Math.ceil(Math.max(Math.abs(ent.vx), Math.abs(ent.vy)) * dt / (TILE/2)));
+  const sdt = dt / steps;
+  for (let s=0; s<steps; s++){
+    // X axis
+    ent.x += ent.vx * sdt;
+    let c0 = Math.floor(ent.x / TILE), c1 = Math.floor((ent.x + ent.w - 0.01) / TILE);
+    let r0 = Math.floor(ent.y / TILE), r1 = Math.floor((ent.y + ent.h - 0.01) / TILE);
+    ent.blockedX = false;
+    if (ent.vx > 0){
+      for (let r=r0; r<=r1; r++) if (isSolid(tileAt(c1, r))){ ent.x = c1*TILE - ent.w; ent.vx = 0; ent.blockedX = true; break; }
+    } else if (ent.vx < 0){
+      for (let r=r0; r<=r1; r++) if (isSolid(tileAt(c0, r))){ ent.x = (c0+1)*TILE; ent.vx = 0; ent.blockedX = true; break; }
+    }
+    // Y axis
+    ent.y += ent.vy * sdt;
+    c0 = Math.floor(ent.x / TILE); c1 = Math.floor((ent.x + ent.w - 0.01) / TILE);
+    r0 = Math.floor(ent.y / TILE); r1 = Math.floor((ent.y + ent.h - 0.01) / TILE);
+    ent.onGround = false;
+    if (ent.vy > 0){
+      for (let c=c0; c<=c1; c++) if (isSolid(tileAt(c, r1))){
+        ent.y = r1*TILE - ent.h; ent.vy = 0; ent.onGround = true; ent.groundTile = tileAt(c, r1); ent.groundC = c; ent.groundR = r1;
+        break;
+      }
+    } else if (ent.vy < 0){
+      let hit = false;
+      for (let c=c0; c<=c1; c++){
+        const ch = tileAt(c, r0);
+        if (isSolid(ch)){ hit = true; bumped.push({c, r:r0, ch}); }
+        else if (ch === '*' && isPlayer){ hit = true; bumped.push({c, r:r0, ch}); } // invisible block solid from below
+      }
+      if (hit){ ent.y = (r0+1)*TILE; ent.vy = 0; }
+    }
+    if (ent.onGround) break; // landed mid-substep: don't let a later substep clear the flag
+  }
+  return bumped;
+}
+
+function headBump(b){
+  const {c, r, ch} = b;
+  const px = c*TILE, py = r*TILE;
+  if (ch === '?'){ setTile(c,r,'B'); popStar(px, py); }
+  else if (ch === 'T'){ setTile(c,r,'B'); spawnTaco(px, py); SFX.pop(); }
+  else if (ch === 'U'){ setTile(c,r,'B'); give1Up(px, py); }
+  else if (ch === '*'){ setTile(c,r,'B'); give1Up(px, py); announce('Secret block! HOW did you know?!'); G.stats.secrets++; }
+  else if (ch === '='){
+    setTile(c,r,' '); SFX.brick(); addScore(50, px+8, py);
+    const pal = LEVELS[G.levelIdx].palette;
+    puff(px+16, py+16, pal.brick, 10, 160);
+  }
+  else SFX.bump();
+}
+function popStar(px, py){
+  SFX.coin(); G.stars++; G.stats.stars++; addScore(100, px+4, py-8);
+  checkStarMilestone();
+  for (let i=0;i<6;i++) sparkle(px+16, py-4);
+}
+function spawnTaco(px, py){
+  G.pickups.push({ kind:'taco', x:px+2, y:py - 22, vy:-120, t:0 });
+}
+function give1Up(px, py){
+  SFX.oneup(); G.lives++; addText(px+4, py-10, '1-UP!', '#7bff7b', 16, 1.5);
+  announce('1-UP! That\'s a spare Orion!');
+}
+function checkStarMilestone(){
+  // cumulative across the whole run (per-level max is ~44, so 100 would never fire)
+  if (G.stats.stars > 0 && G.stats.stars % 50 === 0){
+    G.lives++; SFX.oneup(); announce('50 stars! Free extra Orion!');
+  }
+}
+
+/* ================= PLAYER UPDATE ================= */
+function updatePlayer(dt){
+  const p = player;
+  const speedMul = p.tacoTimer > 0 ? 1.6 : 1;
+  const wantLeft = keys.left, wantRight = keys.right;
+
+  // horizontal
+  if (wantLeft && !wantRight){ p.vx -= MOVE_ACC*dt; p.facing = -1; }
+  else if (wantRight && !wantLeft){ p.vx += MOVE_ACC*dt; p.facing = 1; }
+  else {
+    const fr = (p.onGround ? FRICTION : AIR_FRICTION) * dt;
+    if (p.vx > 0) p.vx = Math.max(0, p.vx - fr);
+    else if (p.vx < 0) p.vx = Math.min(0, p.vx + fr);
+  }
+  const maxs = MAX_SPD * speedMul;
+  p.vx = Math.max(-maxs, Math.min(maxs, p.vx));
+
+  // jump buffering + coyote
+  p.coyote = p.onGround ? COYOTE : Math.max(0, p.coyote - dt);
+  p.jumpBuf = justDown.jump ? JBUF : Math.max(0, p.jumpBuf - dt);
+  if (p.jumpBuf > 0 && p.coyote > 0){
+    p.vy = JUMP_V; p.jumping = true; p.coyote = 0; p.jumpBuf = 0; SFX.jump();
+    p.dancing = false; p.idleTime = 0;
+    // jump-spam easter egg
+    const now = G.time;
+    p.jumpChain = (now - p.lastJumpT < 0.7) ? p.jumpChain + 1 : 1;
+    p.lastJumpT = now;
+    if (p.jumpChain >= 12 && p.boingCooldown <= 0){
+      p.boingCooldown = 20;
+      announce('MAXIMUM BOING ACHIEVED!');
+      SFX.boing(); confetti(p.x + p.w/2 - G.camX, p.y - G.camY, 50);
+      addScore(500, p.x, p.y - 20);
+    }
+  }
+  // variable jump height (only cut velocity that came from a jump — not springs/stomps/knockback)
+  if (p.jumping && !keys.jump && p.vy < -200) p.vy = -200;
+
+  // gravity
+  p.vy += GRAV * dt;
+  if (p.vy > 900) p.vy = 900;
+
+  const wasOnGround = p.onGround;
+  const bumps = moveAndCollide(p, dt, true);
+  for (const b of bumps) headBump(b);
+  if (p.onGround && !wasOnGround) p.stompChain = 0;
+
+  // landed on spring?
+  if (p.onGround && p.groundTile === 'S'){
+    p.vy = SPRING_V; p.jumping = false; p.onGround = false; SFX.spring();
+    if (Math.random() < 0.4) say(SPRING_QUIPS[Math.floor(Math.random()*SPRING_QUIPS.length)], 1.2);
+    puff(p.x + p.w/2, p.y + p.h, '#ff5252', 6, 60);
+  }
+
+  // ducking + toot easter egg
+  const downNow = !!keys.down;
+  p.ducking = downNow && p.onGround;
+  if (downNow && !p.downHeld && p.onGround){
+    p.duckWindow = 3;
+    p.duckCount++;
+    if (p.duckCount >= 5 && p.tootCooldown <= 0){
+      p.tootCooldown = 25; p.duckCount = 0; G.stats.toots++;
+      SFX.toot();
+      puff(p.x + (p.facing>0? -4 : p.w+4), p.y + p.h - 6, '#a8c66c', 10, 50);
+      say('Oops. Beans for breakfast.', 2.2);
+    }
+  }
+  p.downHeld = downNow;
+  if (p.duckWindow > 0){ p.duckWindow -= dt; if (p.duckWindow <= 0) p.duckCount = 0; }
+  p.tootCooldown = Math.max(0, p.tootCooldown - dt);
+  p.boingCooldown = Math.max(0, p.boingCooldown - dt);
+
+  // wall-push easter egg
+  if (p.onGround && p.blockedX && (wantLeft || wantRight)){
+    p.wallPush += dt;
+    if (p.wallPush > 2.5 && p.wallCooldown <= 0){
+      p.wallCooldown = 12; p.wallPush = 0;
+      say('The wall remains undefeated.', 2.5);
+    }
+  } else p.wallPush = 0;
+  p.wallCooldown = Math.max(0, p.wallCooldown - dt);
+
+  // idle dance easter egg
+  const moving = wantLeft || wantRight || !p.onGround || Math.abs(p.vx) > 5;
+  if (moving || downNow){ p.idleTime = 0; p.dancing = false; }
+  else {
+    p.idleTime += dt;
+    if (p.idleTime > 6 && !p.dancing){
+      p.dancing = true;
+      say(DANCE_LINES[Math.floor(Math.random()*DANCE_LINES.length)], 2);
+    }
+    if (p.dancing && Math.random() < dt*3){
+      SFX.dance();
+      const colors = ['#ff5252','#ffd23e','#42a5f5','#ab47bc'];
+      G.particles.push({ x:p.x + p.w/2 + (Math.random()-0.5)*30, y:p.y - 8, vx:(Math.random()-0.5)*30, vy:-50,
+        life:1, t:0, grav:-30, color:colors[Math.floor(Math.random()*4)], size:0, flutter:0, note:true });
+    }
+  }
+
+  // taco timer
+  if (p.tacoTimer > 0){
+    p.tacoTimer -= dt;
+    if (Math.random() < dt*20) sparkle(p.x + Math.random()*p.w, p.y + Math.random()*p.h, '#ffd23e');
+    if (p.tacoTimer <= 0) announce('Taco power depleted. Sad.');
+  }
+  // rainbow trail
+  if (G.rainbow && (Math.abs(p.vx) > 30 || Math.abs(p.vy) > 30)){
+    const hue = (G.time * 300) % 360;
+    G.particles.push({ x:p.x + p.w/2, y:p.y + p.h/2, vx:0, vy:0, life:0.5, t:0, grav:0,
+      color:'hsl(' + hue + ',90%,60%)', size:6, flutter:0, fade:true });
+  }
+
+  p.inv = Math.max(0, p.inv - dt);
+  if (p.bubbleT > 0){ p.bubbleT -= dt; if (p.bubbleT <= 0) p.bubble = ''; }
+
+  // collect stars / touch hazards
+  const c0 = Math.floor(p.x / TILE), c1 = Math.floor((p.x + p.w) / TILE);
+  const r0 = Math.floor(p.y / TILE), r1 = Math.floor((p.y + p.h) / TILE);
+  for (let r=r0; r<=r1; r++) for (let c=c0; c<=c1; c++){
+    const ch = tileAt(c, r);
+    if (ch === 'o'){
+      setTile(c, r, ' '); popStar(c*TILE, r*TILE);
+    } else if (ch === '^'){
+      // spike hitbox: lower half of tile
+      if (p.y + p.h > r*TILE + 14) hurtPlayer(c*TILE + TILE/2);
+    }
+  }
+
+  // flag check
+  if (!G.inBonus && p.x + p.w > G.flagX*TILE + 10){
+    levelClear();
+    return;
+  }
+
+  // secret pipe entry
+  if (p.onGround && (p.groundTile === 'D' || p.groundTile === 'd') && justDown.down){
+    enterPipe();
+  }
+
+  // pit death
+  if (p.y > G.gridH * TILE + 60) pitDeath();
+
+  // pickups
+  for (let i=G.pickups.length-1; i>=0; i--){
+    const it = G.pickups[i];
+    it.t += dt;
+    if (it.vy < 0){ it.vy += 500*dt; it.y += it.vy*dt; if (it.vy >= 0) it.vy = 0; }
+    if (rectsOverlap(p.x,p.y,p.w,p.h, it.x,it.y,32,20)){
+      G.pickups.splice(i,1);
+      if (it.kind === 'taco'){
+        p.tacoTimer = 8; G.stats.tacos++;
+        SFX.taco(); announce('TACO TIME! ZOOM ZOOM!');
+        addScore(500, it.x, it.y);
+      }
+    }
+  }
+
+  // animation
+  p.anim += dt * (Math.abs(p.vx) / 40 + 4);
+}
+function rectsOverlap(ax,ay,aw,ah, bx,by,bw,bh){
+  return ax < bx+bw && ax+aw > bx && ay < by+bh && ay+ah > by;
+}
+
+function hurtPlayer(fromX){
+  const p = player;
+  if (p.inv > 0) return;
+  G.hearts--;
+  SFX.hurt();
+  say(HURT_QUIPS[Math.floor(Math.random()*HURT_QUIPS.length)], 1.2);
+  p.inv = 1.6;
+  p.vy = -340; p.jumping = false;
+  p.vx = (p.x + p.w/2 < fromX ? -1 : 1) * 240;
+  G.camShake = 0.25;
+  if (G.hearts <= 0) die(false);
+}
+function pitDeath(){
+  announce(PIT_QUIPS[Math.floor(Math.random()*PIT_QUIPS.length)]);
+  die(true);
+}
+function die(isPit){
+  G.stats.deaths++;
+  G.lives--;
+  SFX.die();
+  stopMusic();
+  G.state = 'DYING'; G.stateTimer = 1.6;
+}
+function levelClear(){
+  G.state = 'CLEAR'; G.stateTimer = 0;
+  stopMusic(); SFX.flag();
+  player.vx = 0; player.vy = 0;
+  G.score += 1000;
+  if (G.stars >= G.totalStars && G.totalStars > 0){
+    G.score += 1000;
+    announce('STAR CHAMPION! All ' + G.totalStars + ' stars! +1000');
+    confetti(W/2, H/3, 80);
+  } else {
+    confetti(player.x + player.w/2 - G.camX, player.y - G.camY, 40);
+  }
+}
+function enterPipe(){
+  SFX.pipe();
+  G.state = 'PIPE';
+  G.pipeAnim = { t:0, dir:'down', clipY: player.y + player.h };
+  player.vx = 0; player.vy = 0;
+}
+function finishPipeTravel(){
+  const L = LEVELS[G.levelIdx];
+  if (!G.inBonus){
+    // go to bonus
+    G.inBonus = true;
+    G.grid = G.bonusGrid;
+    G.gridW = G.bonusGrid[0].length; G.gridH = G.bonusGrid.length;
+    const [c, r] = L.bonusSpawn;
+    player.x = c*TILE + 6; player.y = r*TILE - player.h;
+    if (!G.foundSecret){ G.foundSecret = true; G.stats.secrets++; announce('Orion found the secret snack stash!'); }
+    confetti(W/2, H/2, 30);
+  } else {
+    // back to main
+    G.inBonus = false;
+    G.grid = G.mainGrid;
+    G.gridW = G.mainGrid[0].length; G.gridH = G.mainGrid.length;
+    const [c, r] = L.mainReturn;
+    player.x = c*TILE + 6; player.y = r*TILE - player.h;
+  }
+  G.camX = Math.max(0, Math.min(G.gridW*TILE - W, player.x - W/2));
+  G.camY = (G.gridH*TILE <= H) ? G.gridH*TILE - H : 0;  // match updateCamera's short-map framing — no snap
+}
+
+/* ================= ENEMIES ================= */
+function updateEnemies(dt){
+  if (G.inBonus) return; // main-level enemies must not simulate against the bonus grid
+  const p = player;
+  for (let i=G.enemies.length-1; i>=0; i--){
+    const e = G.enemies[i];
+    if (e.y > G.gridH*TILE + 200){ G.enemies.splice(i,1); continue; } // fell out of the world
+    if (e.squash > 0){
+      e.squash -= dt;
+      if (e.squash <= 0) G.enemies.splice(i,1);
+      continue;
+    }
+    e.animT += dt;
+    if (e.kind === 'grumblin'){
+      e.vy = (e.vy || 0) + GRAV * dt;
+      if (e.vy > 600) e.vy = 600;
+      e.vx = e.dir * 40;
+      moveAndCollide(e, dt, false);
+      if (e.blockedX){ e.dir *= -1; }
+      // turn at ledge edges
+      if (e.onGround){
+        const aheadC = Math.floor((e.x + (e.dir>0 ? e.w + 2 : -2)) / TILE);
+        const belowR = Math.floor((e.y + e.h + 4) / TILE);
+        if (!isSolid(tileAt(aheadC, belowR))) e.dir *= -1;
+      }
+    } else { // flapjack
+      e.t += dt;
+      e.x += e.dir * 50 * dt;
+      if (e.x < e.startX - e.range || e.x > e.startX + e.range) e.dir *= -1;
+      e.y = e.baseY + Math.sin(e.t * 2.4) * 36;
+    }
+    // skip if far off camera
+    if (Math.abs(e.x - p.x) > W) continue;
+    // player collision
+    if (rectsOverlap(p.x, p.y, p.w, p.h, e.x, e.y, e.w, e.h)){
+      const stomping = p.vy > 0 && (p.y + p.h - e.y) < 16;
+      if (stomping){
+        e.squash = 0.5;
+        p.vy = keys.jump ? -480 : -330; p.jumping = false;
+        p.stompChain++;
+        G.stats.bonks++;
+        const mult = Math.min(p.stompChain, 5);
+        addScore(200 * mult, e.x, e.y - 10);
+        SFX.stomp();
+        G.camShake = 0.12;
+        puff(e.x + e.w/2, e.y + e.h, '#9e9e9e', 6, 70);
+        if (p.stompChain === 2) addText(p.x, p.y - 24, 'DOUBLE BONK!', '#ffd23e', 16, 1.2);
+        else if (p.stompChain >= 3){
+          addText(p.x, p.y - 24, 'TRIPLE BONK!!!', '#ff7a1a', 18, 1.5);
+          confetti(p.x + p.w/2 - G.camX, p.y - G.camY, 30);
+        }
+        else if (Math.random() < 0.6) say(STOMP_QUIPS[Math.floor(Math.random()*STOMP_QUIPS.length)], 1);
+      } else if (p.inv <= 0){
+        hurtPlayer(e.x + e.w/2);
+      }
+    }
+  }
+}
+
+/* ================= PARTICLES & TEXTS ================= */
+function updateParticles(dt){
+  for (let i=G.particles.length-1; i>=0; i--){
+    const pt = G.particles[i];
+    pt.t += dt;
+    if (pt.t >= pt.life){ G.particles.splice(i,1); continue; }
+    pt.vy += (pt.grav||0) * dt;
+    pt.x += pt.vx * dt + (pt.flutter ? Math.sin(pt.t*10)*pt.flutter*dt*10 : 0);
+    pt.y += pt.vy * dt;
+  }
+  if (G.particles.length > 600) G.particles.splice(0, G.particles.length - 600);
+  for (let i=G.texts.length-1; i>=0; i--){
+    const t = G.texts[i];
+    t.t -= dt; t.y -= 30*dt;
+    if (t.t <= 0) G.texts.splice(i,1);
+  }
+}
+
+/* ================= MAIN UPDATE ================= */
+let last = performance.now();
+function frame(now){
+  let dt = Math.min((now - last) / 1000, 1/20);
+  last = now;
+  G.time += dt;
+  update(dt);
+  draw();
+  justDown = {};
+  requestAnimationFrame(frame);
+}
+function update(dt){
+  tickMusic();
+  if (justDown.mute){
+    muted = !muted;
+    if (!muted && AC) music.nextTime = AC.currentTime + 0.1; // resync — no catch-up note burst
+    announce(muted ? 'Music off. Silence...' : 'Music on!', 1.2);
+  }
+
+  switch (G.state){
+    case 'TITLE':
+      updateParticles(dt);
+      if (G.msgTimer > 0) G.msgTimer -= dt;
+      if (justDown.enter || justDown.jump){
+        G.score = 0; G.lives = 5; G.foundSecret = false;
+        G.stats = { bonks:0, stars:0, deaths:0, tacos:0, secrets:0, toots:0 };
+        loadLevel(0);
+      }
+      break;
+    case 'STARTCARD':
+      G.stateTimer -= dt;
+      if (G.stateTimer <= 0 || justDown.enter || justDown.jump) G.state = 'PLAY';
+      break;
+    case 'PLAY':
+      if (justDown.pause){ G.state = 'PAUSE'; G.pauseTip = PAUSE_TIPS[Math.floor(Math.random()*PAUSE_TIPS.length)]; break; }
+      if (justDown.restart){ loadLevel(G.levelIdx, false); break; }
+      updatePlayer(dt);
+      if (G.state !== 'PLAY') break;  // state may have changed (clear/death/pipe)
+      updateEnemies(dt);
+      updateParticles(dt);
+      updateCamera(dt);
+      if (G.msgTimer > 0) G.msgTimer -= dt;
+      break;
+    case 'PAUSE':
+      if (justDown.pause || justDown.enter) G.state = 'PLAY';
+      break;
+    case 'PIPE': {
+      const a = G.pipeAnim;
+      a.t += dt;
+      if (a.dir === 'down'){
+        player.y += 40 * dt;
+        if (a.t > 0.7){ finishPipeTravel(); a.dir = 'up'; a.t = 0; player.y -= 10; }
+      } else {
+        if (a.t > 0.2){ G.state = 'PLAY'; G.pipeAnim = null; }
+      }
+      updateParticles(dt);
+      break;
+    }
+    case 'DYING':
+      G.stateTimer -= dt;
+      player.vy += GRAV * dt * 0.6;
+      player.y += player.vy * dt;
+      updateParticles(dt);
+      if (G.stateTimer <= 0){
+        if (G.lives <= 0){ G.state = 'GAMEOVER'; }
+        else loadLevel(G.levelIdx, false);
+      }
+      break;
+    case 'CLEAR':
+      G.stateTimer += dt;
+      updateParticles(dt);
+      if (G.msgTimer > 0) G.msgTimer -= dt;
+      if (G.stateTimer > 2.2 && (justDown.enter || justDown.jump || G.stateTimer > 5)){
+        if (G.levelIdx + 1 < LEVELS.length) loadLevel(G.levelIdx + 1);
+        else { G.state = 'WIN'; G.stateTimer = 0; stopMusic(); G.camX = 0; G.camY = 0; }
+      }
+      break;
+    case 'GAMEOVER':
+      if (justDown.enter || justDown.jump){
+        G.lives = 5;
+        loadLevel(G.levelIdx, false);
+      }
+      break;
+    case 'WIN':
+      G.stateTimer += dt;
+      G.fireworkTimer -= dt;
+      if (G.fireworkTimer <= 0){
+        G.fireworkTimer = 0.4 + Math.random()*0.4;
+        confetti(100 + Math.random()*(W-200), 60 + Math.random()*200, 30);
+        SFX.pop();
+      }
+      updateParticles(dt);
+      if (G.stateTimer > 2 && justDown.enter){ G.state = 'TITLE'; }
+      break;
+  }
+}
+function updateCamera(dt){
+  const targetX = player.x + player.w/2 - W/2;
+  const targetY = player.y + player.h/2 - H/2 - 40;
+  G.camX += (targetX - G.camX) * Math.min(1, dt*8);
+  G.camY += (targetY - G.camY) * Math.min(1, dt*6);
+  G.camX = Math.max(0, Math.min(G.gridW*TILE - W, G.camX));
+  G.camY = Math.max(-(H*0.3), Math.min(G.gridH*TILE - H, G.camY));
+  if (G.gridH*TILE <= H) G.camY = G.gridH*TILE - H;
+  G.camShake = Math.max(0, G.camShake - dt);
+}
+
+/* ================= DRAWING ================= */
+function draw(){
+  const L = LEVELS[G.levelIdx] || LEVELS[0];
+  const pal = L.palette;
+
+  if (G.state === 'TITLE'){
+    drawTitle();
+    ctx.save(); ctx.translate(-Math.floor(G.camX), -Math.floor(G.camY)); drawParticles(); ctx.restore();
+    if (G.msgTimer > 0) drawAnnounce();
+    return;
+  }
+
+  // sky
+  const grad = ctx.createLinearGradient(0,0,0,H);
+  if (G.inBonus){ grad.addColorStop(0,'#120f24'); grad.addColorStop(1,'#241d45'); }
+  else { grad.addColorStop(0, pal.skyTop); grad.addColorStop(1, pal.skyBot); }
+  ctx.fillStyle = grad;
+  ctx.fillRect(0,0,W,H);
+
+  const shakeX = G.camShake > 0 ? (Math.random()-0.5)*10*G.camShake*4 : 0;
+  const shakeY = G.camShake > 0 ? (Math.random()-0.5)*8*G.camShake*4 : 0;
+  const camX = Math.floor(G.camX + shakeX), camY = Math.floor(G.camY + shakeY);
+
+  if (!G.inBonus) drawBackground(pal, camX);
+
+  ctx.save();
+  ctx.translate(-camX, -camY);
+  drawTiles(pal, camX, camY);
+  drawPickups();
+  drawEnemies();
+  if (G.state !== 'GAMEOVER'){
+    if (G.state === 'PIPE' && G.pipeAnim && G.pipeAnim.dir === 'down'){
+      // clip so Orion sinks INTO the pipe instead of sliding down its face
+      ctx.save(); ctx.beginPath();
+      ctx.rect(camX, camY, W, G.pipeAnim.clipY - camY);
+      ctx.clip(); drawPlayer(); ctx.restore();
+    } else drawPlayer();
+  }
+  drawParticles();
+  drawFloatingTexts();
+  drawBubble();
+  ctx.restore();
+
+  drawHUD(L);
+
+  if (G.msgTimer > 0) drawAnnounce();
+
+  switch (G.state){
+    case 'STARTCARD': drawStartCard(L); break;
+    case 'PAUSE': drawPause(); break;
+    case 'CLEAR': drawClear(L); break;
+    case 'GAMEOVER': drawGameOver(); break;
+    case 'WIN': drawWin(); break;
+  }
+}
+
+function drawBackground(pal, camX){
+  // far stars (cave/night) or sun
+  if (pal.bgStars){
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    for (let i=0;i<40;i++){
+      const x = ((i*173 + 50) - camX*0.1) % (W+40);
+      const y = (i*97) % (H*0.7);
+      ctx.fillRect(((x%(W+40))+(W+40))%(W+40) - 20, y, 2, 2);
+    }
+  } else {
+    ctx.fillStyle = '#fff3ae';
+    ctx.beginPath(); ctx.arc(W-110, 80, 38, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,243,174,0.35)';
+    ctx.beginPath(); ctx.arc(W-110, 80, 52, 0, Math.PI*2); ctx.fill();
+  }
+  // clouds (not in caves)
+  ctx.fillStyle = 'rgba(255,255,255,0.85)';
+  for (let i=0; !pal.bgStars && i<6; i++){
+    const cw = 90 + (i%3)*40;
+    let x = ((i*340 + 80) - camX*0.25) % (W + cw*2);
+    if (x < -cw) x += W + cw*2;
+    const y = 50 + (i*53)%140;
+    drawCloud(x, y, cw);
+  }
+  // hills
+  for (let layer=0; layer<2; layer++){
+    ctx.fillStyle = layer ? pal.hill : pal.hill2;
+    const speed = layer ? 0.5 : 0.35;
+    const hh = layer ? 120 : 170;
+    for (let i=0;i<5;i++){
+      const hw = 260 + (i%2)*120;
+      let x = ((i*420) - camX*speed) % (W + hw*2);
+      if (x < -hw) x += W + hw*2;
+      ctx.beginPath();
+      ctx.moveTo(x - hw/2, H);
+      ctx.quadraticCurveTo(x, H - hh*1.6, x + hw/2, H);
+      ctx.fill();
+    }
+  }
+}
+function drawCloud(x, y, w){
+  const h = w*0.35;
+  ctx.beginPath();
+  ctx.ellipse(x, y, w*0.5, h*0.5, 0, 0, Math.PI*2);
+  ctx.ellipse(x - w*0.25, y + h*0.15, w*0.3, h*0.4, 0, 0, Math.PI*2);
+  ctx.ellipse(x + w*0.25, y + h*0.15, w*0.3, h*0.4, 0, 0, Math.PI*2);
+  ctx.fill();
+}
+
+function drawTiles(pal, camX, camY){
+  const c0 = Math.max(0, Math.floor(camX / TILE) - 1);
+  const c1 = Math.min(G.gridW - 1, Math.ceil((camX + W) / TILE) + 1);
+  const r0 = Math.max(0, Math.floor(camY / TILE) - 1);
+  const r1 = Math.min(G.gridH - 1, Math.ceil((camY + H) / TILE) + 1);
+  for (let r=r0; r<=r1; r++){
+    for (let c=c0; c<=c1; c++){
+      const ch = G.grid[r][c];
+      if (ch === ' ' || ch === 'p' || ch === '*') continue;
+      const x = c*TILE, y = r*TILE;
+      switch (ch){
+        case '#':
+          ctx.fillStyle = pal.ground; ctx.fillRect(x, y, TILE, TILE);
+          ctx.fillStyle = pal.groundTop; ctx.fillRect(x, y, TILE, 10);
+          ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.fillRect(x, y, TILE, 3);
+          break;
+        case 'x':
+          ctx.fillStyle = pal.ground; ctx.fillRect(x, y, TILE, TILE);
+          ctx.fillStyle = 'rgba(0,0,0,0.15)';
+          ctx.fillRect(x+4, y+6, 5, 5); ctx.fillRect(x+20, y+18, 6, 5); ctx.fillRect(x+10, y+22, 4, 4);
+          break;
+        case '=':
+          ctx.fillStyle = pal.brick; ctx.fillRect(x, y, TILE, TILE);
+          ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 2;
+          ctx.strokeRect(x+1, y+1, TILE-2, TILE-2);
+          ctx.beginPath();
+          ctx.moveTo(x, y+16); ctx.lineTo(x+TILE, y+16);
+          ctx.moveTo(x+16, y); ctx.lineTo(x+16, y+8);
+          ctx.moveTo(x+8, y+16); ctx.lineTo(x+8, y+TILE);
+          ctx.moveTo(x+24, y+16); ctx.lineTo(x+24, y+TILE);
+          ctx.stroke();
+          break;
+        case '?': case 'T': case 'U': {
+          const bounce = Math.sin(G.time*4 + c)*1.5;
+          ctx.fillStyle = '#f5a623'; ctx.fillRect(x+1, y+1+bounce*0, TILE-2, TILE-2);
+          ctx.fillStyle = '#ffd23e'; ctx.fillRect(x+3, y+3, TILE-6, TILE-6);
+          ctx.fillStyle = '#7a4f12';
+          ctx.font = 'bold 20px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.fillText('?', x+TILE/2, y+TILE/2 + bounce);
+          break;
+        }
+        case 'B':
+          ctx.fillStyle = '#9c7b4f'; ctx.fillRect(x+1, y+1, TILE-2, TILE-2);
+          ctx.fillStyle = 'rgba(0,0,0,0.2)'; ctx.fillRect(x+6, y+6, TILE-12, TILE-12);
+          break;
+        case 'o': drawStarCoin(x, y, c, r); break;
+        case '^':
+          ctx.fillStyle = '#aab4c2';
+          ctx.beginPath();
+          ctx.moveTo(x, y+TILE); ctx.lineTo(x+8, y+10); ctx.lineTo(x+16, y+TILE);
+          ctx.lineTo(x+16, y+TILE); ctx.lineTo(x+24, y+10); ctx.lineTo(x+TILE, y+TILE);
+          ctx.fill();
+          ctx.fillStyle = '#7d8794';
+          ctx.fillRect(x, y+TILE-4, TILE, 4);
+          break;
+        case 'S': {
+          ctx.fillStyle = '#888'; ctx.fillRect(x+6, y+14, TILE-12, 6);
+          ctx.fillRect(x+8, y+22, TILE-16, 4);
+          ctx.fillStyle = '#ff5252'; ctx.fillRect(x+2, y+6, TILE-4, 8);
+          ctx.fillStyle = '#ffaaaa'; ctx.fillRect(x+2, y+6, TILE-4, 3);
+          ctx.fillStyle = '#666'; ctx.fillRect(x+4, y+26, TILE-8, 6);
+          break;
+        }
+        case '(': case ')': case '[': case ']': case 'D': case 'd': {
+          const isTop = ch==='(' || ch===')' || ch==='D' || ch==='d';
+          const isLeft = ch==='(' || ch==='[' || ch==='D';
+          ctx.fillStyle = '#2e9e3e';
+          if (isTop){
+            ctx.fillRect(x + (isLeft? 0 : -4), y, TILE + 4, TILE);
+            ctx.fillStyle = '#46c558';
+            ctx.fillRect(x + (isLeft? 3 : -4), y+3, TILE, 8);
+          } else {
+            ctx.fillRect(x + (isLeft? 3 : -3), y, TILE, TILE);
+            ctx.fillStyle = '#46c558';
+            ctx.fillRect(x + (isLeft? 6 : -3), y, 6, TILE);
+          }
+          // secret pipes sparkle as a hint
+          if ((ch === 'D' || ch === 'd') && Math.random() < 0.02)
+            sparkle(x + Math.random()*TILE, y + Math.random()*10, '#b6ffc1');
+          break;
+        }
+        case 'F': drawFlag(x, y); break;
+        case ',': drawDeco(x, y, pal, c); break;
+      }
+    }
+  }
+}
+function drawStarCoin(x, y, c, r){
+  const cx = x + TILE/2, cy = y + TILE/2 + Math.sin(G.time*3 + c*0.7 + r)*3;
+  const sq = Math.abs(Math.sin(G.time*2.5 + c)); // spin effect
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(0.5 + sq*0.5, 1);
+  drawStarShape(0, 0, 11, '#ffd23e', '#c79a13');
+  ctx.restore();
+}
+function drawStarShape(cx, cy, rad, fill, stroke){
+  ctx.beginPath();
+  for (let i=0;i<10;i++){
+    const ang = -Math.PI/2 + i*Math.PI/5;
+    const rr = i%2===0 ? rad : rad*0.45;
+    const px = cx + Math.cos(ang)*rr, py = cy + Math.sin(ang)*rr;
+    if (i===0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+  ctx.fillStyle = fill; ctx.fill();
+  if (stroke){ ctx.strokeStyle = stroke; ctx.lineWidth = 1.5; ctx.stroke(); }
+}
+function drawFlag(x, y){
+  // pole rises 7 tiles above base
+  const top = y - 7*TILE;
+  ctx.fillStyle = '#cfd8dc';
+  ctx.fillRect(x + 14, top, 5, y - top + TILE);
+  drawStarShape(x + 16, top - 4, 10, '#ffd23e', '#c79a13');
+  // flag cloth
+  const wave = Math.sin(G.time*4)*4;
+  ctx.fillStyle = '#ff7a1a';
+  ctx.beginPath();
+  ctx.moveTo(x + 19, top + 8);
+  ctx.lineTo(x + 19 + 38 + wave, top + 22);
+  ctx.lineTo(x + 19, top + 36);
+  ctx.closePath(); ctx.fill();
+  drawStarShape(x + 33, top + 22, 6, '#fff', null);
+}
+function drawDeco(x, y, pal, c){
+  if (pal.deco === 'grass'){
+    ctx.strokeStyle = '#3fae3f'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let i=0;i<3;i++){
+      const gx = x + 8 + i*8, sway = Math.sin(G.time*2 + c + i)*2;
+      ctx.moveTo(gx, y+TILE);
+      ctx.quadraticCurveTo(gx + sway, y + 18, gx + sway, y + 12);
+    }
+    ctx.stroke();
+  } else if (pal.deco === 'crystal'){
+    ctx.fillStyle = 'rgba(120,220,255,0.7)';
+    ctx.beginPath();
+    ctx.moveTo(x+10, y+TILE); ctx.lineTo(x+16, y+8); ctx.lineTo(x+22, y+TILE);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(180,240,255,0.5)';
+    ctx.beginPath();
+    ctx.moveTo(x+20, y+TILE); ctx.lineTo(x+25, y+16); ctx.lineTo(x+30, y+TILE);
+    ctx.fill();
+  } else {
+    const tw = (Math.sin(G.time*3 + c) + 1)/2;
+    ctx.globalAlpha = 0.3 + tw*0.6;
+    drawStarShape(x+16, y+16, 6, '#fff8d0', null);
+    ctx.globalAlpha = 1;
+  }
+}
+function drawPickups(){
+  for (const it of G.pickups){
+    ctx.drawImage(sprites.taco, it.x - 2, it.y + Math.sin(it.t*4)*2 - 2);
+  }
+}
+function drawEnemies(){
+  for (const e of G.enemies){
+    let img;
+    if (e.kind === 'grumblin'){
+      img = e.squash > 0 ? sprites.grumblin.squash : (Math.floor(e.animT*6)%2 ? sprites.grumblin.walk1 : sprites.grumblin.walk2);
+    } else {
+      img = e.squash > 0 ? sprites.flapjack.fly2 : (Math.floor(e.animT*8)%2 ? sprites.flapjack.fly1 : sprites.flapjack.fly2);
+    }
+    ctx.save();
+    const cx = e.x + e.w/2;
+    ctx.translate(cx, e.y + e.h);
+    if (e.dir > 0) ctx.scale(-1, 1);
+    if (e.squash > 0) ctx.scale(1, 0.5);
+    ctx.drawImage(img, -img.width/2, -img.height);
+    ctx.restore();
+    if (e.squash > 0.3){
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 11px monospace'; ctx.textAlign='center';
+      ctx.fillText('oof', e.x + e.w/2, e.y - 4);
+    }
+  }
+}
+function drawPlayer(){
+  const p = player;
+  if (p.inv > 0 && Math.floor(G.time*16)%2 === 0 && G.state === 'PLAY') return;
+  let frameKey = 'idle';
+  if (G.state === 'DYING') frameKey = 'jump';
+  else if (p.dancing) frameKey = Math.floor(G.time*4)%2 ? 'dance1' : 'dance2';
+  else if (p.ducking) frameKey = 'duck';
+  else if (!p.onGround) frameKey = 'jump';
+  else if (Math.abs(p.vx) > 20) frameKey = Math.floor(p.anim)%2 ? 'run1' : 'run2';
+  const set = (G.bigHead && frameKey !== 'duck') ? sprites.orionBig : sprites.orion; // duck art shifts the head down; big-head split would mangle it
+  const img = set[frameKey];
+  ctx.save();
+  const cx = p.x + p.w/2;
+  ctx.translate(cx, p.y + p.h);
+  if (p.facing < 0) ctx.scale(-1,1);
+  if (G.state === 'DYING') ctx.scale(1,-1);
+  ctx.drawImage(img, -img.width/2, -img.height + 2);
+  ctx.restore();
+}
+function drawParticles(){
+  for (const pt of G.particles){
+    const a = 1 - pt.t/pt.life;
+    ctx.globalAlpha = Math.max(0, a);
+    if (pt.note){
+      ctx.fillStyle = pt.color;
+      ctx.font = 'bold 16px monospace'; ctx.textAlign = 'center';
+      ctx.fillText(Math.floor(pt.t*4)%2 ? '♪' : '♫', pt.x, pt.y);
+    } else if (pt.star){
+      drawStarShape(pt.x, pt.y, pt.size*2, pt.color, null);
+    } else {
+      ctx.fillStyle = pt.color;
+      ctx.fillRect(pt.x - pt.size/2, pt.y - pt.size/2, pt.size, pt.size);
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+function drawFloatingTexts(){
+  for (const t of G.texts){
+    ctx.globalAlpha = Math.min(1, t.t/(t.dur*0.5));
+    ctx.fillStyle = t.color;
+    ctx.font = 'bold ' + t.size + 'px monospace';
+    ctx.textAlign = 'center';
+    ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 3;
+    ctx.strokeText(t.text, t.x, t.y);
+    ctx.fillText(t.text, t.x, t.y);
+  }
+  ctx.globalAlpha = 1;
+}
+function drawBubble(){
+  const p = player;
+  if (!p.bubble || G.state === 'DYING') return;
+  ctx.font = 'bold 13px monospace';
+  const tw = ctx.measureText(p.bubble).width;
+  const bx = p.x + p.w/2, by = p.y - 30;
+  const bw = tw + 18, bh = 24;
+  ctx.fillStyle = 'rgba(255,255,255,0.95)';
+  ctx.strokeStyle = '#333'; ctx.lineWidth = 2;
+  roundRect(bx - bw/2, by - bh, bw, bh, 8);
+  ctx.fill(); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(bx - 5, by); ctx.lineTo(bx + 5, by); ctx.lineTo(bx, by + 7);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(255,255,255,0.95)'; ctx.fill();
+  ctx.fillStyle = '#222'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(p.bubble, bx, by - bh/2);
+  ctx.textBaseline = 'alphabetic';
+}
+function roundRect(x, y, w, h, r){
+  ctx.beginPath();
+  ctx.moveTo(x+r, y);
+  ctx.arcTo(x+w, y, x+w, y+h, r);
+  ctx.arcTo(x+w, y+h, x, y+h, r);
+  ctx.arcTo(x, y+h, x, y, r);
+  ctx.arcTo(x, y, x+w, y, r);
+  ctx.closePath();
+}
+
+/* ---- HUD & screens ---- */
+function drawHUD(L){
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  ctx.fillRect(0, 0, W, 36);
+  ctx.font = 'bold 16px monospace';
+  ctx.textAlign = 'left'; ctx.fillStyle = '#fff';
+  ctx.fillText('SCORE ' + String(G.score).padStart(6,'0'), 14, 24);
+  // stars
+  drawStarShape(204, 18, 8, '#ffd23e', '#c79a13');
+  ctx.fillStyle = '#fff';
+  ctx.fillText('×' + G.stars + '/' + G.totalStars, 218, 24);
+  // hearts
+  for (let i=0;i<3;i++){
+    drawHeart(330 + i*26, 18, 9, i < G.hearts ? '#ff5252' : 'rgba(255,255,255,0.25)');
+  }
+  // lives
+  ctx.fillStyle = '#fff';
+  ctx.fillText('ORION ×' + G.lives, 430, 24);
+  // level name
+  ctx.textAlign = 'right';
+  ctx.fillText((G.inBonus ? '★ SECRET ZONE ★' : L.sub + '  ' + L.name), W - 14, 24);
+  // taco meter
+  if (player.tacoTimer > 0){
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    ctx.fillRect(W/2 - 80, 44, 160, 14);
+    ctx.fillStyle = '#ffd23e';
+    ctx.fillRect(W/2 - 78, 46, 156 * (player.tacoTimer/8), 10);
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 11px monospace'; ctx.textAlign = 'center';
+    ctx.fillText('TACO POWER', W/2, 54);
+  }
+}
+function drawHeart(x, y, s, color){
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(x, y + s*0.3);
+  ctx.bezierCurveTo(x, y - s*0.5, x - s, y - s*0.5, x - s, y + s*0.1);
+  ctx.bezierCurveTo(x - s, y + s*0.6, x, y + s*0.9, x, y + s*1.2);
+  ctx.bezierCurveTo(x, y + s*0.9, x + s, y + s*0.6, x + s, y + s*0.1);
+  ctx.bezierCurveTo(x + s, y - s*0.5, x, y - s*0.5, x, y + s*0.3);
+  ctx.fill();
+}
+function drawAnnounce(){
+  const a = Math.min(1, G.msgTimer / 0.4);
+  ctx.globalAlpha = a;
+  ctx.font = 'bold 22px monospace'; ctx.textAlign = 'center';
+  ctx.strokeStyle = 'rgba(0,0,0,0.7)'; ctx.lineWidth = 5;
+  ctx.strokeText(G.msgText, W/2, 96);
+  ctx.fillStyle = '#ffd23e';
+  ctx.fillText(G.msgText, W/2, 96);
+  ctx.globalAlpha = 1;
+}
+function overlay(alpha=0.55){
+  ctx.fillStyle = 'rgba(10,8,30,' + alpha + ')';
+  ctx.fillRect(0, 0, W, H);
+}
+function bigText(text, y, size=40, color='#fff'){
+  ctx.font = 'bold ' + size + 'px monospace';
+  ctx.textAlign = 'center';
+  ctx.strokeStyle = 'rgba(0,0,0,0.8)'; ctx.lineWidth = Math.max(4, size/7);
+  ctx.strokeText(text, W/2, y);
+  ctx.fillStyle = color;
+  ctx.fillText(text, W/2, y);
+}
+function drawTitle(){
+  const grad = ctx.createLinearGradient(0,0,0,H);
+  grad.addColorStop(0,'#2b1c63'); grad.addColorStop(0.7,'#7e4bb8'); grad.addColorStop(1,'#ff9e5e');
+  ctx.fillStyle = grad; ctx.fillRect(0,0,W,H);
+  // twinkly stars (Orion = constellation!)
+  for (let i=0;i<50;i++){
+    const x = (i*191) % W, y = (i*113) % (H*0.6);
+    const tw = (Math.sin(G.time*2 + i)+1)/2;
+    ctx.globalAlpha = 0.2 + tw*0.7;
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(x, y, i%4===0 ? 3 : 2, i%4===0 ? 3 : 2);
+  }
+  ctx.globalAlpha = 1;
+  // big star behind logo
+  ctx.save();
+  ctx.translate(W/2, 150);
+  ctx.rotate(Math.sin(G.time*0.7)*0.08);
+  ctx.globalAlpha = 0.35;
+  drawStarShape(0, 0, 130, '#ffd23e', null);
+  ctx.globalAlpha = 1;
+  ctx.restore();
+  const bob = Math.sin(G.time*2)*6;
+  bigText('SUPER', 120 + bob, 52, '#ffd23e');
+  bigText('ORION', 185 + bob, 76, '#ff7a1a');
+  bigText('⭐ A Totally Legit Adventure ⭐', 230 + bob, 18, '#fff');
+  // running Orion across the bottom
+  const rx = ((G.time*120) % (W + 120)) - 60;
+  ctx.save();
+  ctx.translate(rx, H - 110);
+  const img = sprites.orion[Math.floor(G.time*8)%2 ? 'run1' : 'run2'];
+  ctx.drawImage(img, 0, 0);
+  ctx.restore();
+  ctx.fillStyle = '#3c2a14';
+  ctx.fillRect(0, H - 78, W, 78);
+  ctx.fillStyle = '#58c443';
+  ctx.fillRect(0, H - 78, W, 14);
+  if (Math.floor(G.time*1.6)%2 === 0) bigText('PRESS ENTER (or tap) TO START', 320, 24, '#fff');
+  bigText('← → / A D move    SPACE / ↑ jump    ↓ duck', 380, 15, '#e8d9ff');
+  bigText('P pause    M music    R restart level', 408, 15, '#e8d9ff');
+  bigText('Psst… try standing still for a while. Or typing things…', 450, 13, '#c9b6ee');
+}
+function drawStartCard(L){
+  overlay(0.75);
+  bigText(L.sub, H/2 - 60, 26, '#ffd23e');
+  bigText(L.name, H/2, 44, '#fff');
+  bigText('ORION ×' + G.lives, H/2 + 56, 22, '#fff');
+}
+function drawPause(){
+  overlay(0.55);
+  bigText('PAUSED', H/2 - 50, 48, '#ffd23e');
+  bigText(G.pauseTip, H/2 + 10, 18, '#fff');
+  bigText('P or ENTER to resume', H/2 + 60, 16, '#bbb');
+}
+function drawClear(L){
+  if (G.stateTimer < 1) return;
+  overlay(Math.min(0.7, (G.stateTimer-1)*1.2));
+  bigText('LEVEL CLEAR!', H/2 - 70, 50, '#ffd23e');
+  bigText(L.name + ' — done and dusted!', H/2 - 18, 20, '#fff');
+  bigText('Stars: ' + G.stars + '/' + G.totalStars + '    Score: ' + G.score, H/2 + 24, 20, '#fff');
+  if (G.stateTimer > 2.2) bigText(G.levelIdx + 1 < LEVELS.length ? 'ENTER for next level!' : 'ENTER for the grand finale!', H/2 + 80, 18, '#7bff7b');
+}
+function drawGameOver(){
+  overlay(0.8);
+  bigText('GAME OVER', H/2 - 60, 54, '#ff5252');
+  bigText('Take a snack break and try again!', H/2, 20, '#fff');
+  bigText('(Orion never really loses. ENTER to continue!)', H/2 + 40, 16, '#bbb');
+}
+function drawWin(){
+  const grad = ctx.createLinearGradient(0,0,0,H);
+  grad.addColorStop(0,'#1a1145'); grad.addColorStop(1,'#5e2c8a');
+  ctx.fillStyle = grad; ctx.fillRect(0,0,W,H);
+  ctx.save(); ctx.translate(0,0);
+  drawParticles();
+  ctx.restore();
+  bigText('🏆 YOU WIN! 🏆', 110, 52, '#ffd23e');
+  bigText('ORION SAVED THE DAY!', 165, 30, '#fff');
+  const s = G.stats;
+  const lines = [
+    ['Enemies bonked', s.bonks],
+    ['Stars collected', s.stars],
+    ['Tacos consumed', s.tacos],
+    ['Secrets found', s.secrets],
+    ['Gravity lessons learned', s.deaths],
+    ['Mysterious toots', s.toots],
+  ];
+  ctx.font = 'bold 19px monospace';
+  lines.forEach((ln, i)=>{
+    const y = 230 + i*34;
+    ctx.textAlign = 'right'; ctx.fillStyle = '#cfc3f0';
+    ctx.fillText(ln[0] + ' ', W/2 + 40, y);
+    ctx.textAlign = 'left'; ctx.fillStyle = '#ffd23e';
+    ctx.fillText(String(ln[1]), W/2 + 56, y);
+  });
+  bigText('FINAL SCORE: ' + G.score, 460, 28, '#7bff7b');
+  if (G.stateTimer > 2 && Math.floor(G.time*1.6)%2 === 0) bigText('ENTER to play again', 500, 17, '#fff');
+}
+
+/* ================= GO! ================= */
+window.__SO = { G, player, loadLevel, LEVELS, keys };  // debug/test hook
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
