@@ -41,6 +41,10 @@ function ground(spans) { // spans: [[startCol, endCol], ...] — everything betw
    - stars 'o': rows 12-13 over ground = easy hops; above platforms = walk-collect
    - springs 'S': launch ~6 rows up; NEVER put solid tiles directly above a spring
    - enemies: 'E' on row 14 (stands on ground), 'V' flies around rows 9-12
+   - new creatures (row 14 like E): 'K' prickleburr (unstompable!), 'J' hoppit,
+     'R' rolypoly (stomp→shell→kick); boss wiring: 'G' King Dad + 5-tall 'W' gate
+     column (rows 10-14) + 'M' Mum behind it — boss levels must have NO pits
+   - optional palette extras: weather:'snow'|'embers'|'bubbles', ice:true
    - spawn 'p' near col 3; flag 'F' on row 14 near the right end, ground under it
    - keep the first 8 cols free of enemies, spikes and pits
    Example placements below — REPLACE them with your design: */

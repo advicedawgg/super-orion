@@ -24,6 +24,14 @@ del levelgen-work.js
 
 If the checker prints `[FAIL]` lines, fix the placements in `levelgen-work.js`, regenerate, re-paste, and re-check. Do not ship a FAIL.
 
+## When levelcheck FAILs — debugging rules (read before touching anything)
+
+1. **The checker reads `index.html`, NOT `levelgen-work.js`.** After ANY edit to `levelgen-work.js` you MUST re-run it and re-paste the fresh object over the old one in `index.html` before re-running the checker. If the checker reports tiles you believe you already moved, the two files are out of sync — re-paste first, do not investigate.
+2. **Never reconstruct the grid in your head.** Do not reason from memory about which column holds which tile — run `node levelgen-work.js` and read coordinates off the ruler preview, or run this one-liner against the real file:
+   `node -e "const L=eval(require('fs').readFileSync('index.html','utf8').match(/const LEVELS = (\[[\s\S]*?\n\]);/)[1]);L[IDX].main.forEach((row,r)=>{let s='';for(let c=0;c<row.length;c++)if(row[c]!==' ')s+=c+':'+row[c]+' ';if(s)console.log(r,s)})"`
+3. **One FAIL line = one small placement fix, then immediately re-check.** Keep deliberation to a few sentences; if the same FAIL survives 3 fix attempts, stop and report what you tried instead of re-deriving the level.
+4. **Common root causes, check these first:** (a) a floating platform more than 4 rows above the nearest floor is unreachable unless a spring sits on the floor within ~2 cols of the platform's edge (spring bounce reaches 6 rows and drifts 2-3 cols); stars above an unreachable platform are unreachable too. (b) a `D` you cannot STAND ON (solid tile directly above it, or no route up) fails the secret-pipe check. (c) blocks under a platform's footprint cannot be stood on.
+
 ## Physics envelope (what the player can actually do)
 
 | Move | Limit | Design rule |
@@ -39,8 +47,14 @@ If the checker prints `[FAIL]` lines, fix the placements in `levelgen-work.js`, 
 '#' ground top   'x' dirt/stone     '=' breakable brick   'B' used block
 '?' block→star   'T' block→taco     'U' block→1-UP        '*' invisible 1-UP block
 'o' star         '^' spikes (hurt)  'S' spring (solid, bouncy)
-'()' pipe top    '[]' pipe body     'Dd' SECRET pipe top (press ↓ = bonus room)
+'()' pipe top    '[]' pipe body     'Dd' SECRET pipe top: TWO tiles SIDE-BY-SIDE on the SAME row, D left + d right, NEVER stacked vertically (press ↓ = bonus room)
 'E' grumblin     'V' flapjack       'F' flag (goal)       'p' spawn   ',' decoration
+'K' prickleburr (spiky walker — stomping HURTS the player; killed only by a kicked shell)
+'J' hoppit (frog; hops toward the player when within ~0.75 screens; stompable)
+'R' rolypoly (stomp → idle shell; touch shell → kicks off, bowls over other enemies, bounces off walls, never hurts the player; stomp a sliding shell to stop it)
+'G' KING DAD boss (3 stomps to defeat; hops toward player, angrier each hit; max ONE per level)
+'W' castle gate (solid until the 'G' boss is defeated, then crumbles — checker treats it as OPEN, but a 'W' without a 'G' in the level is an instant FAIL)
+'M' Mum (rescue NPC — walk into her after the gate falls; max ONE per level; needs floor below like enemies)
 ```
 
 ## Quirks that break levels if ignored
@@ -51,6 +65,9 @@ If the checker prints `[FAIL]` lines, fix the placements in `levelgen-work.js`, 
 - `p` drops to the first floor below it. Keep the first ~8 cols free of enemies, spikes and pits.
 - A `Dd` pipe requires the level object to have `bonus` (map), `bonusSpawn` ([col,row] in bonus), and `mainReturn` ([col,row] of the D tile in main). The bonus room MUST contain its own `Dd` exit pipe or the player is trapped. No `p`, `F`, `E`, `V` in bonus rooms. Copy Level 4's bonus wiring as the reference.
 - Stars inside `?` blocks count toward the level's star total automatically; `T`, `U`, `*` do not.
+- `K`/`J`/`R`/`G`/`M` follow the same "needs floor below" rule as `E`. Bonus rooms must not contain any of them (or `W`).
+- A boss level (`G` + `W` gate + `M`) must have **no pits at all** — King Dad hops toward the player and a boss in a pit = gate never opens = softlock. Copy Level 10's wiring as the reference: 5-tall `W` column (rows 10-14, unjumpable), `M` then `F` behind it.
+- Optional palette fields: `weather:'snow'|'embers'|'bubbles'` (ambient particles) and `ice:true` (slippery ground friction). Both validated by the checker if present.
 
 ## Design taste (it's for a young kid)
 

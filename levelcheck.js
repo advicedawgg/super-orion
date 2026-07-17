@@ -27,8 +27,11 @@ try {
 const TILE = 32, PW = 20, PH = 30, DT = 1 / 120;
 console.log(`physics: JUMP_V=${JUMP_V} (rise ${(JUMP_V * JUMP_V / (2 * GRAV) / 32).toFixed(2)} tiles), spring rise ${(SPRING_V * SPRING_V / (2 * GRAV) / 32).toFixed(2)} tiles, full-jump air distance ${(2 * -JUMP_V / GRAV * MAX_SPD / 32).toFixed(2)} tiles`);
 
+// NOTE: 'W' (castle gate) is solid in-game but NOT here — reachability is
+// checked as if King Dad 'G' is already defeated and the gate has crumbled.
 const SOLID = new Set(['#', 'x', '=', '?', 'T', 'U', 'B', '(', ')', '[', ']', 'D', 'd', 'S']);
-const LEGEND = new Set('#x=?TU*Bo^S()[]DdEVFp, '.split(''));
+const LEGEND = new Set('#x=?TU*Bo^S()[]DdEVFKRJGWMp, '.split(''));
+const GROUND_ENEMIES = new Set(['E', 'K', 'R', 'J', 'G', 'M']); // need a floor below (M = Mum, not an enemy, same rule)
 const key = (c, r) => c + ',' + r;
 
 function parseMap(rows) {
@@ -52,6 +55,8 @@ function validate(L, i) {
     if (!L.palette[f]) bad(`${tag}: palette missing '${f}'`);
   if (!['grass', 'crystal', 'star'].includes(L.palette.deco)) bad(`${tag}: palette.deco must be grass|crystal|star`);
   if (typeof L.palette.bgStars !== 'boolean') bad(`${tag}: palette.bgStars must be true/false`);
+  if (L.palette.weather != null && !['snow', 'embers', 'bubbles'].includes(L.palette.weather)) bad(`${tag}: palette.weather must be snow|embers|bubbles (or omitted)`);
+  if (L.palette.ice != null && typeof L.palette.ice !== 'boolean') bad(`${tag}: palette.ice must be true/false (or omitted)`);
   if (!(L.music.bpm >= 60 && L.music.bpm <= 260)) bad(`${tag}: music.bpm out of range`);
   if (!['square', 'triangle', 'sawtooth', 'sine'].includes(L.music.wave)) bad(`${tag}: music.wave invalid`);
   if (typeof L.music.transpose !== 'number') bad(`${tag}: music.transpose must be a number`);
@@ -69,18 +74,22 @@ function validate(L, i) {
   if (!hasD && L.bonus) bad(`${tag}: has a bonus room but no 'Dd' secret pipe in main to enter it`);
   if (L.bonus) {
     if (count(L.bonus, 'D') === 0) bad(`${tag}: bonus room has no 'Dd' exit pipe — player would be trapped`);
-    if (count(L.bonus, 'p') || count(L.bonus, 'F') || count(L.bonus, 'E') || count(L.bonus, 'V'))
-      bad(`${tag}: bonus room must not contain p, F, E or V`);
+    for (const ch of ['p', 'F', 'E', 'V', 'K', 'R', 'J', 'G', 'W', 'M'])
+      if (count(L.bonus, ch)) bad(`${tag}: bonus room must not contain '${ch}'`);
     if (!dropLands(L.bonus, L.bonusSpawn[0], L.bonusSpawn[1])) bad(`${tag}: bonusSpawn ${L.bonusSpawn} drops into nothing`);
     if (!dropLands(L.main, L.mainReturn[0], L.mainReturn[1])) bad(`${tag}: mainReturn ${L.mainReturn} drops into nothing`);
   }
-  // grumblins need a floor below or they fall out of the world
+  // a 'W' gate only ever opens when King Dad 'G' is defeated — gate without boss = unwinnable
+  if (count(L.main, 'W') > 0 && count(L.main, 'G') === 0) bad(`${tag}: has 'W' gate tiles but no 'G' boss to open them`);
+  if (count(L.main, 'G') > 1) bad(`${tag}: more than one 'G' boss`);
+  if (count(L.main, 'M') > 1) bad(`${tag}: more than one 'M' Mum`);
+  // ground enemies (and Mum) need a floor below or they fall out of the world
   const { grid, w, h } = parseMap(L.main);
   for (let r = 0; r < h; r++) for (let c = 0; c < w; c++)
-    if (grid[r][c] === 'E') {
+    if (GROUND_ENEMIES.has(grid[r][c])) {
       let ok = false;
       for (let rr = r + 1; rr < h; rr++) if (SOLID.has(grid[rr][c])) { ok = true; break; }
-      if (!ok) warn(`${tag}: grumblin 'E' at col ${c} row ${r} has no floor below (will fall out)`);
+      if (!ok) warn(`${tag}: '${grid[r][c]}' at col ${c} row ${r} has no floor below (will fall out)`);
     }
   return true;
 }

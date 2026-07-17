@@ -100,6 +100,39 @@ if ('ontouchstart' in window){
   cv.addEventListener('pointerdown', ()=>{ initAudio(); justDown.enter = true; });
 }
 
+// gamepad (Steam Deck / any standard pad): d-pad or left stick = move, A/B = jump
+// (A also confirms menus), Start = start/pause, Select = music. Polled each frame;
+// only writes on press/release edges so keyboard and touch keep working alongside it.
+const padPrev = {};
+function pollGamepad(){
+  if (!navigator.getGamepads) return;
+  let gp = null;
+  for (const p of navigator.getGamepads()) if (p && p.connected){ gp = p; break; }
+  if (!gp) return;
+  const b = i => !!(gp.buttons[i] && gp.buttons[i].pressed);
+  const ax = i => gp.axes[i] || 0;
+  const now = {
+    left:  b(14) || ax(0) < -0.35,
+    right: b(15) || ax(0) >  0.35,
+    down:  b(13) || ax(1) >  0.5,
+    jump:  b(0)  || b(1),
+    enter: b(9),
+    pause: b(9),
+    mute:  b(8),
+  };
+  for (const a in now){
+    const edge = now[a] && !padPrev[a];
+    if (edge){
+      justDown[a] = true;
+      initAudio();
+      if (a === 'jump' && G.state !== 'PLAY') justDown.enter = true; // A = confirm on menus
+    }
+    if (now[a]) keys[a] = true;
+    else if (padPrev[a]) keys[a] = false;
+    padPrev[a] = now[a];
+  }
+}
+
 /* ================= AUDIO ================= */
 let AC = null, masterGain = null, musicGain = null, muted = false;
 function initAudio(){
@@ -151,6 +184,10 @@ const SFX = {
   dance(){ tone(midi([72,76,79,84][Math.floor(Math.random()*4)]), 0.09, 'square', 0.06); },
   boing(){ tone(180, 0.12, 'square', 0.1, 420); },
   pop(){ tone(660, 0.06, 'square', 0.08, 880); },
+  kick(){ tone(240, 0.1, 'square', 0.13, 620); noiseBurst(0.05, 0.05); },
+  bosshit(){ tone(160, 0.2, 'sawtooth', 0.15, 60); noiseBurst(0.12, 0.08); },
+  bossdown(){ [48,52,55,60,64,67,72].forEach((m,i)=>tone(midi(m), 0.12, 'square', 0.12, null, i*0.09)); noiseBurst(0.3, 0.1); },
+  hop(){ tone(200, 0.08, 'triangle', 0.07, 320); },
 };
 
 /* ---- music sequencer (original bouncy tune) ---- */
@@ -215,6 +252,15 @@ const PAL = {
   t:'#f5c542', // taco shell
   T:'#7bc043', // taco lettuce
   r:'#d44a2b', // taco tomato
+  n:'#8a5a2b', // prickleburr body
+  q:'#5c3a1a', // prickleburr dark
+  l:'#7ed957', // hoppit lime
+  L:'#3f9e2f', // hoppit dark
+  c:'#f7eccb', // cream (bellies/faces)
+  s:'#3bb0a8', // rolypoly shell
+  u:'#1f6f68', // rolypoly shell dark
+  a:'#607d9c', // King Dad shirt
+  b:'#3a3f52', // King Dad pants
 };
 // 12 wide x 16 tall frames for Orion
 const ORION_FRAMES = {
@@ -401,6 +447,182 @@ const TACO_FRAME = [
   ' tttttttttt ',
   '  tttttttt  ',
 ];
+// spiky — jumping on it is a bad idea
+const PRICKLE_FRAMES = {
+  walk1:[
+  '  k   k  k  ',
+  ' kqqqqqqqk  ',
+  ' qnnnnnnnq  ',
+  'kqnwwnnwwqk ',
+  ' qnwknnkwnq ',
+  'kqnnnnnnnqk ',
+  ' qnnmmmmnq  ',
+  ' kqnnnnnqk  ',
+  '  qq   qq   ',
+  '  qq   qq   '],
+  walk2:[
+  '  k   k  k  ',
+  ' kqqqqqqqk  ',
+  ' qnnnnnnnq  ',
+  'kqnwwnnwwqk ',
+  ' qnwknnkwnq ',
+  'kqnnnnnnnqk ',
+  ' qnnmmmmnq  ',
+  ' kqnnnnnqk  ',
+  '   qq qq    ',
+  '  qq   qq   '],
+};
+const HOPPIT_FRAMES = {
+  sit:[
+  '  lwl  lwl  ',
+  '  lkl  lkl  ',
+  ' llllllllll ',
+  ' llllllllll ',
+  ' lccccccccl ',
+  ' lccccccccl ',
+  ' llllllllll ',
+  '  Lll  llL  ',
+  ' LLLL  LLLL ',
+  ' LL      LL '],
+  jump:[
+  '  lwl  lwl  ',
+  '  lkl  lkl  ',
+  ' llllllllll ',
+  ' lccccccccl ',
+  ' lccccccccl ',
+  ' llllllllll ',
+  '  ll    ll  ',
+  '  ll    ll  ',
+  ' LL      LL ',
+  'LL        LL'],
+};
+const ROLY_FRAMES = {
+  walk1:[
+  '    ssssss  ',
+  '   ssuussus ',
+  '  csusssssu ',
+  ' ccssussuss ',
+  'cwcsssssssu ',
+  'ckcssussuss ',
+  ' ccssssssss ',
+  '  ccsssssss ',
+  '  cc cc cc  ',
+  '  cc cc cc  '],
+  walk2:[
+  '    ssssss  ',
+  '   ssuussus ',
+  '  csusssssu ',
+  ' ccssussuss ',
+  'cwcsssssssu ',
+  'ckcssussuss ',
+  ' ccssssssss ',
+  '  ccsssssss ',
+  '   cc cc cc ',
+  '  cc cc cc  '],
+  shell:[
+  '            ',
+  '            ',
+  '            ',
+  '   ssssss   ',
+  '  suussuus  ',
+  ' sussssssus ',
+  ' sussssssus ',
+  ' suussuussu ',
+  '  sussssus  ',
+  '   ssssss   '],
+  spin1:[
+  '            ',
+  '            ',
+  '            ',
+  '   ssssss   ',
+  '  ssuusuus  ',
+  ' susussusus ',
+  ' sussusssus ',
+  ' susussusus ',
+  '  ssuusuus  ',
+  '   ssssss   '],
+  spin2:[
+  '            ',
+  '            ',
+  '            ',
+  '   ssssss   ',
+  '  suususss  ',
+  ' sussususus ',
+  ' susssussus ',
+  ' sussususus ',
+  '  suususss  ',
+  '   ssssss   '],
+};
+// KING DAD (Max) — 16x14, rendered big. Bald, short black beard, crown + cape. Guards Mum.
+const KING_FRAMES = {
+  stand:[
+  '    Y Y Y Y     ',
+  '    YYYYYYY     ',
+  '    FFFFFFF     ',
+  '   FFFFFFFFF    ',
+  '   FFeFFFeFF    ',
+  '   kFFFFFFFk    ',
+  '   kkFmmmFkk    ',
+  '    kkkkkkk     ',
+  ' rraaaaaaaaarr  ',
+  ' rrFaaaaaaaFrr  ',
+  '  raaaaaaaaar   ',
+  '   bbbbbbbbb    ',
+  '   bbb   bbb    ',
+  '  WWWW   WWWW   '],
+  hop:[
+  '    Y Y Y Y     ',
+  '    YYYYYYY     ',
+  '    FFFFFFF     ',
+  '   FFFFFFFFF    ',
+  '   FFeFFFeFF    ',
+  '   kFFFFFFFk    ',
+  '   kkFmmmFkk    ',
+  '    kkkkkkk     ',
+  ' rraaaaaaaaarr  ',
+  ' rrFaaaaaaaFrr  ',
+  '  raaaaaaaaar   ',
+  '   bbbbbbbbb    ',
+  '    bbb bbb     ',
+  '   WWW   WWW    '],
+};
+// MUM (Gemma) — waiting to be rescued behind the castle gate
+const MUM_FRAMES = {
+  idle:[
+  '   HHHHHH   ',
+  '  HHHHHHHH  ',
+  ' HHFFFFFFHH ',
+  ' HHFeFFeFHH ',
+  ' HHFFFFFFHH ',
+  ' HHFFmmFFHH ',
+  ' HH pppp HH ',
+  ' HHppppppHH ',
+  '  FppppppF  ',
+  '  pppppppp  ',
+  '  pppppppp  ',
+  '  pppppppp  ',
+  ' pppppppppp ',
+  ' pppppppppp ',
+  '  WW    WW  ',
+  '  WW    WW  '],
+  wave:[
+  '   HHHHHH  F',
+  '  HHHHHHHHF ',
+  ' HHFFFFFFHH ',
+  ' HHFeFFeFHH ',
+  ' HHFFFFFFHH ',
+  ' HHFFmmFFHH ',
+  ' HH ppppFHH ',
+  ' HHppppppHH ',
+  '  Fpppppp   ',
+  '  pppppppp  ',
+  '  pppppppp  ',
+  '  pppppppp  ',
+  ' pppppppppp ',
+  ' pppppppppp ',
+  '  WW    WW  ',
+  '  WW    WW  '],
+};
 
 function renderFrame(rows, scale, bigHead=false){
   const w = rows[0].length, h = rows.length;
@@ -427,10 +649,15 @@ function renderFrame(rows, scale, bigHead=false){
   return c;
 }
 const SCALE = 2;
-const sprites = { orion:{}, orionBig:{}, grumblin:{}, flapjack:{}, taco:null };
+const sprites = { orion:{}, orionBig:{}, grumblin:{}, flapjack:{}, prickle:{}, hoppit:{}, roly:{}, king:{}, taco:null };
 for (const k in ORION_FRAMES){ sprites.orion[k] = renderFrame(ORION_FRAMES[k], SCALE); sprites.orionBig[k] = renderFrame(ORION_FRAMES[k], SCALE, true); }
 for (const k in GRUMBLIN_FRAMES) sprites.grumblin[k] = renderFrame(GRUMBLIN_FRAMES[k], SCALE);
 for (const k in FLAPJACK_FRAMES) sprites.flapjack[k] = renderFrame(FLAPJACK_FRAMES[k], SCALE);
+for (const k in PRICKLE_FRAMES) sprites.prickle[k] = renderFrame(PRICKLE_FRAMES[k], SCALE);
+for (const k in HOPPIT_FRAMES) sprites.hoppit[k] = renderFrame(HOPPIT_FRAMES[k], SCALE);
+for (const k in ROLY_FRAMES) sprites.roly[k] = renderFrame(ROLY_FRAMES[k], SCALE);
+for (const k in KING_FRAMES) sprites.king[k] = renderFrame(KING_FRAMES[k], 3);
+sprites.mum = {}; for (const k in MUM_FRAMES) sprites.mum[k] = renderFrame(MUM_FRAMES[k], SCALE);
 sprites.taco = renderFrame(TACO_FRAME, 3);
 
 /* ================= LEVELS =================
@@ -441,6 +668,10 @@ sprites.taco = renderFrame(TACO_FRAME, 3);
    'o' star (coin)       '^' spikes          'S' spring
    '(' ')' pipe top      '[' ']' pipe body   'D' 'd' SECRET pipe top
    'E' grumblin          'V' flapjack        'F' flag
+   'K' prickleburr (spiky, no stomp!)        'J' hoppit (hops)
+   'R' rolypoly (stomp->shell->kick)         'G' KING DAD boss (3 bonks)
+   'W' castle gate (crumbles when King Dad falls)
+   'M' Mum — rescue her! (stands, waves)
    'p' player spawn      ',' decoration
 ============================================== */
 const LEVELS = [
@@ -621,8 +852,8 @@ const LEVELS = [
 '                       ===                                                             == V                             ',
 '        ?o?              T                    ?o?                       U                       ?o?                     ',
 '      o        o                 o                    o                                                  o  o           ',
-'                              o                    o    d              o                                                ',
-'   p , , E    ,  ,          E      S              E     D                 E       S               E             F       ',
+'                              o                    o    Dd             o                                                ',
+'   p , , E    ,  ,        S E      S              E          S            E       S               E             F       ',
 '###################   ##################   ####################    ###################    ##############################',
 'xxxxxxxxxxxxxxxxxxx   xxxxxxxxxxxxxxxxxx   xxxxxxxxxxxxxxxxxxxx    xxxxxxxxxxxxxxxxxxx    xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
   ],
@@ -641,6 +872,124 @@ const LEVELS = [
   ],
   bonusSpawn:[3,10],
   mainReturn:[56,13],
+},
+{
+  name:'Bubbly Beach', sub:'World 2-1',
+  palette:{ skyTop:'#5fb8e8', skyBot:'#fff3c9', ground:'#d9b36b', groundTop:'#f2dc9e', brick:'#e07a5f',
+            hill:'#7fd4e8', hill2:'#4fbcdc', deco:'grass', bgStars:false, weather:'bubbles' },
+  music:{ bpm:145, transpose:5, wave:'triangle' },
+  main:[
+'                                                                                                                      ',
+'                                                                                                                      ',
+'                                                                                                                      ',
+'                                                                                                                      ',
+'                                                                                                                      ',
+'                                                                                                                      ',
+'                                                                                                                      ',
+'                                                                                                                      ',
+'                                                                                              oooo                    ',
+'                                                                                              ####                    ',
+'                                                                                          V                           ',
+'                                              ?T? oooo                                                                ',
+'                     ooo                          ####       oo                      oo                               ',
+'                                 o  o   o                           Dd                                                ',
+'   p   ,          R        R     ,E   E   E            ,            []    R ,  E            S       ,   E  E  F       ',
+'#####################   #####################################  ######################  ###############################',
+'xxxxxxxxxxxxxxxxxxxxx   xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx  xxxxxxxxxxxxxxxxxxxxxx  xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+  ],
+  bonus:[
+'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+'x                            x',
+'x  ooooo   ooooo   ooooo     x',
+'x                            x',
+'x                            x',
+'x                            x',
+'x                            x',
+'x                            x',
+'x                        Dd  x',
+'x   S      S      S      []  x',
+'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+  ],
+  bonusSpawn:[3,10],
+  mainReturn:[68,13],
+},
+{
+  name:'Ice Cream Peaks', sub:'World 2-2',
+  palette:{ skyTop:'#8ecae6', skyBot:'#f0faff', ground:'#6d88c4', groundTop:'#eef8ff', brick:'#7fb3d5',
+            hill:'#cfe8f5', hill2:'#aed6ee', deco:'crystal', bgStars:false, weather:'snow', ice:true },
+  music:{ bpm:126, transpose:-5, wave:'triangle' },
+  main:[
+'                                                                                                                        ',
+'                                                                                                                        ',
+'                                                                                                                        ',
+'                                                                                                                        ',
+'                                                                                                                        ',
+'                                                                                                                        ',
+'                                                                                                                        ',
+'                                                                                                                        ',
+'                                                                          oo                     ooo                    ',
+'                                                                         ####                    ####                   ',
+'                                                                  V                                                     ',
+'                                ?o?             oooo                              T                     U               ',
+'               ooo        oo         ooo   ooo  ####    oo            ####               oo                             ',
+'                                                                                                                        ',
+'   p   ,        K     E             , K     K                 E       ,               K        S       ,  E   K F       ',
+'##########################  ############################  ###############################  #############################',
+'xxxxxxxxxxxxxxxxxxxxxxxxxx  xxxxxxxxxxxxxxxxxxxxxxxxxxxx  xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx  xxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+  ],
+  bonus:null, bonusSpawn:null, mainReturn:null,
+},
+{
+  name:'Taco Volcano', sub:'World 2-3',
+  palette:{ skyTop:'#2b0f1e', skyBot:'#ff8c42', ground:'#4a2c3a', groundTop:'#e85d3a', brick:'#8a4a3a',
+            hill:'#3d1a2e', hill2:'#54243d', deco:'star', bgStars:true, weather:'embers' },
+  music:{ bpm:172, transpose:-3, wave:'sawtooth' },
+  main:[
+'                                                                                                                            ',
+'                                                                                                                            ',
+'                                                                                                                            ',
+'                                                                                                                            ',
+'                                                                                                                            ',
+'                                                                                                                            ',
+'                                                                                                                            ',
+'                                                                                                                            ',
+'                                                                                              oooo                          ',
+'                                                                        V                     ####                          ',
+'                                                                                                                            ',
+'                       ooo          =T=            ooo                    oooo        ?o?                                   ',
+'             ooo                           ooo                            ####   oo                                         ',
+'                                                                                                                            ',
+'   p    ,      J    ^^        J         ,  ^^^  K         J     J   ^^                    , S       J   ^^  E   K   F       ',
+'#######################   #########################   ###########################  #########################################',
+'xxxxxxxxxxxxxxxxxxxxxxx   xxxxxxxxxxxxxxxxxxxxxxxxx   xxxxxxxxxxxxxxxxxxxxxxxxxxx  xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+  ],
+  bonus:null, bonusSpawn:null, mainReturn:null,
+},
+{
+  name:"King Dad's Castle", sub:'World 2-4',
+  palette:{ skyTop:'#171233', skyBot:'#3d2e66', ground:'#6b6580', groundTop:'#9a93b8', brick:'#8a6d3f',
+            hill:'#241d4a', hill2:'#2f2758', deco:'star', bgStars:true },
+  music:{ bpm:178, transpose:-7, wave:'square' },
+  main:[
+'                                                                                                                              ',
+'                                                                                                                              ',
+'                                                                                                                              ',
+'                                                                                                                              ',
+'                                                                                                                              ',
+'                                                                                                                              ',
+'                                                                                                                              ',
+'                                                                                                                              ',
+'                                           oooo                                                                               ',
+'                                           ####                                                                               ',
+'                                                                                                                W             ',
+'                      ===                         U               ?T?                                           W             ',
+'                     o   o                                                   ooo            ooo                 W             ',
+'          ooo                                                                 =                                 W oo          ',
+'   p    ,     E   ^^      K   , J   ^^^ S             E   K , J       ^^  E   =     ,             G             W    M  F     ',
+'##############################################################################################################################',
+'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+  ],
+  bonus:null, bonusSpawn:null, mainReturn:null,
 },
 ];
 
@@ -662,6 +1011,9 @@ const PAUSE_TIPS = [
 const SPRING_QUIPS = ['WHEEE!','TO THE MOON!','So bouncy!','Boing physics!'];
 const HURT_QUIPS = ['Ouchie!','Rude!','I felt that.','Hey!!'];
 const DANCE_LINES = ['Dance break!','Nobody\'s watching, right?','Got the moves!','Wiggle wiggle!'];
+const KICK_QUIPS = ['STRIKE!','Bowling time!','Rolly rolly!','Gooooal!'];
+const BOSS_HIT_QUIPS = ['KING DAD: "Ow! Right in the crown!"','KING DAD: "Bedtime! I mean it!"','KING DAD: "Wait til I tell your mother— oh."'];
+const PRICKLE_QUIPS = ['Too spiky!','Ow! Pointy!','Do NOT hug that.'];
 
 /* ================= GAME STATE ================= */
 const G = {
@@ -676,7 +1028,8 @@ const G = {
   flagX:0, flagY:0,
   stateTimer:0,
   pauseTip:'',
-  stats:{ bonks:0, stars:0, deaths:0, tacos:0, secrets:0, toots:0 },
+  stats:{ bonks:0, stars:0, deaths:0, tacos:0, secrets:0, toots:0, kings:0, mums:0 },
+  mum:null,
   // easter egg flags
   bigHead:false, rainbow:false,
   msgTimer:0, msgText:'',
@@ -687,7 +1040,7 @@ const G = {
 const player = {
   x:0, y:0, w:20, h:30, vx:0, vy:0,
   onGround:false, facing:1, anim:0, jumping:false,
-  coyote:0, jumpBuf:0,
+  coyote:0, jumpBuf:0, landT:0,
   inv:0,            // invincibility after hurt
   tacoTimer:0,
   // easter egg trackers
@@ -764,7 +1117,7 @@ function loadLevel(idx, keepScore=true){
   G.bonusGrid = L.bonus ? parseMap(L.bonus).grid : null;
   G.inBonus = false;
   G.grid = G.mainGrid; G.gridW = m.w; G.gridH = m.h;
-  G.enemies = []; G.particles = []; G.texts = []; G.pickups = [];
+  G.enemies = []; G.particles = []; G.texts = []; G.pickups = []; G.mum = null;
   G.stars = 0; G.totalStars = 0; G.hearts = 3;
   G.camX = 0; G.camY = 0;
   player.vx = 0; player.vy = 0; player.inv = 0; player.tacoTimer = 0;
@@ -778,6 +1131,11 @@ function loadLevel(idx, keepScore=true){
       if (ch === 'p'){ player.x = c*TILE+6; player.y = (r+1)*TILE - player.h; grid[r][c]=' '; }
       else if (ch === 'E'){ G.enemies.push(makeGrumblin(c*TILE+3, (r+1)*TILE)); grid[r][c]=' '; }
       else if (ch === 'V'){ G.enemies.push(makeFlapjack(c*TILE+4, r*TILE+8)); grid[r][c]=' '; }
+      else if (ch === 'K'){ G.enemies.push(makePrickle(c*TILE+3, (r+1)*TILE)); grid[r][c]=' '; }
+      else if (ch === 'J'){ G.enemies.push(makeHoppit(c*TILE+3, (r+1)*TILE)); grid[r][c]=' '; }
+      else if (ch === 'R'){ G.enemies.push(makeRoly(c*TILE+3, (r+1)*TILE)); grid[r][c]=' '; }
+      else if (ch === 'G'){ G.enemies.push(makeKing(c*TILE-6, (r+1)*TILE)); grid[r][c]=' '; }
+      else if (ch === 'M'){ G.mum = { x:c*TILE+4, y:(r+1)*TILE - 32, saved:false, animT:0 }; grid[r][c]=' '; }
       else if (ch === 'o' || ch === '?'){ G.totalStars++; }   // '?' blocks pop a star too
       else if (ch === 'F'){ G.flagX = c; G.flagY = r; }
     }
@@ -795,9 +1153,22 @@ function makeGrumblin(x, footY){
 function makeFlapjack(x, y){
   return { kind:'flapjack', x, y, w:22, h:14, baseY:y, t:Math.random()*6, vx:-50, dir:-1, squash:0, dead:false, range:90, startX:x };
 }
+function makePrickle(x, footY){
+  return { kind:'prickle', x, y: footY - 20, w:22, h:20, vx:-30, vy:0, dir:-1, squash:0, dead:false, animT:Math.random() };
+}
+function makeHoppit(x, footY){
+  return { kind:'hoppit', x, y: footY - 20, w:22, h:20, vx:0, vy:0, dir:-1, squash:0, dead:false, animT:Math.random(), hopT:0.8 + Math.random() };
+}
+function makeRoly(x, footY){
+  return { kind:'roly', x, y: footY - 20, w:22, h:20, vx:-35, vy:0, dir:-1, squash:0, dead:false, animT:Math.random(), shell:false, sliding:false };
+}
+function makeKing(x, footY){
+  return { kind:'king', x, y: footY - 40, w:44, h:40, vx:0, vy:0, dir:-1, squash:0, dead:false, animT:0,
+           hp:3, hurtT:0, hopT:1.4, airborne:false };
+}
 
 /* ================= TILE HELPERS ================= */
-const SOLID = new Set(['#','x','=','?','T','U','B','(',')','[',']','D','d','S']);
+const SOLID = new Set(['#','x','=','?','T','U','B','(',')','[',']','D','d','S','W']);
 function tileAt(c, r){
   if (c < 0 || c >= G.gridW) return 'x';     // walls at level edges
   if (r < 0) return ' ';
@@ -889,12 +1260,14 @@ function updatePlayer(dt){
   const p = player;
   const speedMul = p.tacoTimer > 0 ? 1.6 : 1;
   const wantLeft = keys.left, wantRight = keys.right;
+  const icy = !!LEVELS[G.levelIdx].palette.ice && p.onGround;   // slippy slidey
 
   // horizontal
-  if (wantLeft && !wantRight){ p.vx -= MOVE_ACC*dt; p.facing = -1; }
-  else if (wantRight && !wantLeft){ p.vx += MOVE_ACC*dt; p.facing = 1; }
+  const acc = MOVE_ACC * (icy ? 0.5 : 1);
+  if (wantLeft && !wantRight){ p.vx -= acc*dt; p.facing = -1; }
+  else if (wantRight && !wantLeft){ p.vx += acc*dt; p.facing = 1; }
   else {
-    const fr = (p.onGround ? FRICTION : AIR_FRICTION) * dt;
+    const fr = (p.onGround ? (icy ? 260 : FRICTION) : AIR_FRICTION) * dt;
     if (p.vx > 0) p.vx = Math.max(0, p.vx - fr);
     else if (p.vx < 0) p.vx = Math.min(0, p.vx + fr);
   }
@@ -926,9 +1299,14 @@ function updatePlayer(dt){
   if (p.vy > 900) p.vy = 900;
 
   const wasOnGround = p.onGround;
+  const fallV = p.vy;
   const bumps = moveAndCollide(p, dt, true);
   for (const b of bumps) headBump(b);
-  if (p.onGround && !wasOnGround) p.stompChain = 0;
+  if (p.onGround && !wasOnGround){
+    p.stompChain = 0;
+    if (fallV > 430){ p.landT = 0.13; puff(p.x + p.w/2, p.y + p.h, 'rgba(220,220,220,0.7)', 4, 50); }
+  }
+  p.landT = Math.max(0, (p.landT || 0) - dt);
 
   // landed on spring?
   if (p.onGround && p.groundTile === 'S'){
@@ -1040,6 +1418,24 @@ function updatePlayer(dt){
     }
   }
 
+  // Mum rescue!
+  if (G.mum && !G.inBonus){
+    G.mum.animT += dt;
+    if (!G.mum.saved && rectsOverlap(p.x, p.y, p.w, p.h, G.mum.x, G.mum.y, 24, 32)){
+      G.mum.saved = true; G.stats.mums++;
+      SFX.oneup();
+      announce('ORION SAVED MUM!', 3.5);
+      say('MUM! I found you!', 3);
+      addScore(3000, G.mum.x, G.mum.y - 20);
+      confetti(G.mum.x + 12 - G.camX, G.mum.y - G.camY, 70);
+      for (let i=0;i<8;i++) G.particles.push({ x:G.mum.x + 12, y:G.mum.y + 8, vx:(Math.random()-0.5)*100, vy:-60-Math.random()*80,
+        life:1.4, t:0, grav:-30, color:'#ff6b9d', size:5+Math.random()*3, flutter:2, heart:true });
+    }
+    if (G.mum.saved && Math.random() < dt*1.5)
+      G.particles.push({ x:G.mum.x + 12, y:G.mum.y, vx:(Math.random()-0.5)*30, vy:-50,
+        life:1.6, t:0, grav:-20, color:'#ff6b9d', size:4+Math.random()*3, flutter:3, heart:true });
+  }
+
   // animation
   p.anim += dt * (Math.abs(p.vx) / 40 + 4);
 }
@@ -1125,19 +1521,83 @@ function updateEnemies(dt){
       continue;
     }
     e.animT += dt;
-    if (e.kind === 'grumblin'){
+    const walkAndTurn = (spd, ledgeTurn)=>{
       e.vy = (e.vy || 0) + GRAV * dt;
       if (e.vy > 600) e.vy = 600;
-      e.vx = e.dir * 40;
+      e.vx = e.dir * spd;
       moveAndCollide(e, dt, false);
       if (e.blockedX){ e.dir *= -1; }
-      // turn at ledge edges
-      if (e.onGround){
+      if (ledgeTurn && e.onGround){
         const aheadC = Math.floor((e.x + (e.dir>0 ? e.w + 2 : -2)) / TILE);
         const belowR = Math.floor((e.y + e.h + 4) / TILE);
         if (!isSolid(tileAt(aheadC, belowR))) e.dir *= -1;
       }
-    } else { // flapjack
+    };
+    if (e.kind === 'grumblin') walkAndTurn(40, true);
+    else if (e.kind === 'prickle') walkAndTurn(30, true);
+    else if (e.kind === 'hoppit'){
+      e.vy = (e.vy || 0) + GRAV * dt;
+      if (e.vy > 700) e.vy = 700;
+      if (e.onGround){
+        e.vx = 0;
+        e.hopT -= dt;
+        if (e.hopT <= 0 && Math.abs(e.x - p.x) < W*0.75){  // naps until Orion shows up
+          e.dir = p.x > e.x ? 1 : -1;
+          e.vy = -520; e.vx = e.dir * 130;
+          e.hopT = 1.1 + Math.random()*0.8;
+          SFX.hop();
+        } else if (e.hopT <= 0) e.hopT = 0.3;
+      }
+      moveAndCollide(e, dt, false);
+      if (e.blockedX) e.dir *= -1;
+    }
+    else if (e.kind === 'roly'){
+      if (!e.shell) walkAndTurn(35, true);
+      else if (!e.sliding){
+        e.vy = (e.vy || 0) + GRAV * dt; if (e.vy > 600) e.vy = 600;
+        e.vx = 0;
+        moveAndCollide(e, dt, false);
+      } else {
+        e.vy = (e.vy || 0) + GRAV * dt; if (e.vy > 700) e.vy = 700;
+        e.vx = e.dir * 340;
+        moveAndCollide(e, dt, false);
+        if (e.blockedX){ e.dir *= -1; SFX.bump(); G.camShake = Math.max(G.camShake, 0.06); }
+        // bowl over everything in the way (royalty excluded)
+        for (const other of G.enemies){
+          if (other === e || other.squash > 0 || other.kind === 'king') continue;
+          if (rectsOverlap(e.x, e.y, e.w, e.h, other.x, other.y, other.w, other.h)){
+            other.squash = 0.5; G.stats.bonks++;
+            addScore(200, other.x, other.y - 10);
+            SFX.stomp(); puff(other.x + other.w/2, other.y + other.h, '#9e9e9e', 6, 70);
+          }
+        }
+      }
+    }
+    else if (e.kind === 'king'){
+      if (!e.intro && Math.abs(e.x - p.x) < 360){
+        e.intro = true;
+        announce('KING DAD: "No rescuing Mum before dinner!"', 3);
+        SFX.toot(); G.camShake = 0.2;
+      }
+      e.hurtT = Math.max(0, e.hurtT - dt);
+      e.vy = (e.vy || 0) + GRAV * dt;
+      if (e.vy > 800) e.vy = 800;
+      if (e.onGround){
+        e.vx = 0;
+        e.hopT -= dt;
+        if (e.hopT <= 0 && Math.abs(e.x - p.x) < W){   // waits on his throne until Orion arrives
+          const rage = 3 - e.hp;                       // hops harder as he loses hearts
+          e.dir = p.x > e.x ? 1 : -1;
+          e.vy = -560 - rage*50; e.vx = e.dir * (110 + rage*40);
+          e.hopT = 1.4 - rage*0.3;
+          SFX.hop(); G.camShake = Math.max(G.camShake, 0.08);
+        } else if (e.hopT <= 0) e.hopT = 0.3;
+      }
+      moveAndCollide(e, dt, false);
+      if (e.blockedX) e.dir *= -1;
+      if (e.onGround && Math.abs(e.vx) > 0){ e.vx = 0; puff(e.x + e.w/2, e.y + e.h, '#8a8296', 8, 90); G.camShake = Math.max(G.camShake, 0.12); }
+    }
+    else { // flapjack
       e.t += dt;
       e.x += e.dir * 50 * dt;
       if (e.x < e.startX - e.range || e.x > e.startX + e.range) e.dir *= -1;
@@ -1148,8 +1608,40 @@ function updateEnemies(dt){
     // player collision
     if (rectsOverlap(p.x, p.y, p.w, p.h, e.x, e.y, e.w, e.h)){
       const stomping = p.vy > 0 && (p.y + p.h - e.y) < 16;
-      if (stomping){
-        e.squash = 0.5;
+      if (e.kind === 'prickle'){
+        if (p.inv <= 0){
+          hurtPlayer(e.x + e.w/2);
+          if (stomping) say(PRICKLE_QUIPS[Math.floor(Math.random()*PRICKLE_QUIPS.length)], 1.4);
+        }
+      }
+      else if (e.kind === 'roly' && e.shell){
+        if (e.sliding){
+          if (stomping){ e.sliding = false; p.vy = -330; p.jumping = false; SFX.stomp(); puff(e.x+e.w/2, e.y+e.h, '#9e9e9e', 5, 60); }
+          // a rolling shell never hurts Orion — it's a toy
+        } else {
+          e.sliding = true;
+          e.dir = (p.x + p.w/2 < e.x + e.w/2) ? 1 : -1;
+          SFX.kick(); addScore(100, e.x, e.y - 10);
+          if (Math.random() < 0.7) say(KICK_QUIPS[Math.floor(Math.random()*KICK_QUIPS.length)], 1.2);
+        }
+      }
+      else if (e.kind === 'king'){
+        if (stomping && e.hurtT <= 0){
+          e.hp--; e.hurtT = 1.1;
+          p.vy = -520; p.jumping = false;
+          G.stats.bonks++;
+          SFX.bosshit(); G.camShake = 0.35;
+          addScore(500, e.x, e.y - 20);
+          puff(e.x + e.w/2, e.y, '#ffd23e', 12, 140);
+          if (e.hp <= 0) kingDefeated(e);
+          else announce(BOSS_HIT_QUIPS[Math.min(2 - e.hp, BOSS_HIT_QUIPS.length-1)], 2.5);
+        }
+        else if (stomping){ p.vy = -380; p.jumping = false; }   // bounced off while he's flashing
+        else if (p.inv <= 0) hurtPlayer(e.x + e.w/2);
+      }
+      else if (stomping){
+        if (e.kind === 'roly'){ e.shell = true; e.sliding = false; }
+        else e.squash = 0.5;
         p.vy = keys.jump ? -480 : -330; p.jumping = false;
         p.stompChain++;
         G.stats.bonks++;
@@ -1169,6 +1661,19 @@ function updateEnemies(dt){
       }
     }
   }
+}
+function kingDefeated(e){
+  e.squash = 1.6;
+  G.stats.kings++;
+  SFX.bossdown();
+  announce('KING DAD IS DEFEATED! GO SAVE MUM!', 3.5);
+  addScore(2000, e.x, e.y - 30);
+  confetti(e.x + e.w/2 - G.camX, e.y - G.camY, 80);
+  G.camShake = 0.5;
+  // the castle gate crumbles
+  for (let r=0;r<G.gridH;r++) for (let c=0;c<G.gridW;c++)
+    if (G.grid[r][c] === 'W'){ setTile(c, r, ' '); puff(c*TILE+16, r*TILE+16, '#c9b26a', 8, 120); }
+  SFX.brick();
 }
 
 /* ================= PARTICLES & TEXTS ================= */
@@ -1195,6 +1700,7 @@ function frame(now){
   let dt = Math.min((now - last) / 1000, 1/20);
   last = now;
   G.time += dt;
+  pollGamepad();
   update(dt);
   draw();
   justDown = {};
@@ -1214,7 +1720,7 @@ function update(dt){
       if (G.msgTimer > 0) G.msgTimer -= dt;
       if (justDown.enter || justDown.jump){
         G.score = 0; G.lives = 5; G.foundSecret = false;
-        G.stats = { bonks:0, stars:0, deaths:0, tacos:0, secrets:0, toots:0 };
+        G.stats = { bonks:0, stars:0, deaths:0, tacos:0, secrets:0, toots:0, kings:0, mums:0 };
         loadLevel(0);
       }
       break;
@@ -1325,6 +1831,7 @@ function draw(){
   ctx.translate(-camX, -camY);
   drawTiles(pal, camX, camY);
   drawPickups();
+  drawMum();
   drawEnemies();
   if (G.state !== 'GAMEOVER'){
     if (G.state === 'PIPE' && G.pipeAnim && G.pipeAnim.dir === 'down'){
@@ -1338,6 +1845,8 @@ function draw(){
   drawFloatingTexts();
   drawBubble();
   ctx.restore();
+
+  if (!G.inBonus) drawWeather(pal, camX);
 
   drawHUD(L);
 
@@ -1399,6 +1908,37 @@ function drawCloud(x, y, w){
   ctx.ellipse(x - w*0.25, y + h*0.15, w*0.3, h*0.4, 0, 0, Math.PI*2);
   ctx.ellipse(x + w*0.25, y + h*0.15, w*0.3, h*0.4, 0, 0, Math.PI*2);
   ctx.fill();
+}
+// ambient weather, drawn in screen space; stateless — everything derives from time+index
+function drawWeather(pal, camX){
+  const kind = pal.weather; if (!kind) return;
+  const t = G.time;
+  ctx.save();
+  for (let i=0;i<26;i++){
+    const seed = i*137.53;
+    if (kind === 'snow'){
+      const x = ((seed*7 + Math.sin(t*0.7 + i)*40 - camX*0.35) % (W+40) + (W+40)) % (W+40) - 20;
+      const y = ((seed*3.7 + t*(28+(i%5)*9)) % (H+20)) - 10;
+      ctx.globalAlpha = 0.45 + (i%3)*0.15;
+      ctx.fillStyle = '#fff';
+      const s = i%3===0 ? 3 : 2;
+      ctx.fillRect(x, y, s, s);
+    } else if (kind === 'embers'){
+      const x = ((seed*5.1 + Math.sin(t*1.3 + i)*26 - camX*0.3) % (W+30) + (W+30)) % (W+30) - 15;
+      const y = H - (((seed*2.3 + t*(36+(i%4)*14)) % (H+30)) - 15);
+      const fl = (Math.sin(t*6 + i*2)+1)/2;
+      ctx.globalAlpha = 0.25 + fl*0.5;
+      ctx.fillStyle = i%3 ? '#ff9d4d' : '#ffd23e';
+      ctx.fillRect(x, y, 3, 3);
+    } else if (kind === 'bubbles'){
+      const x = ((seed*6.3 + Math.sin(t*1.1 + i)*18 - camX*0.25) % (W+30) + (W+30)) % (W+30) - 15;
+      const y = H - (((seed*4.1 + t*(22+(i%5)*8)) % (H+30)) - 15);
+      ctx.globalAlpha = 0.3;
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(x, y, 2 + (i%4), 0, Math.PI*2); ctx.stroke();
+    }
+  }
+  ctx.restore();
 }
 
 function drawTiles(pal, camX, camY){
@@ -1482,6 +2022,17 @@ function drawTiles(pal, camX, camY){
             sparkle(x + Math.random()*TILE, y + Math.random()*10, '#b6ffc1');
           break;
         }
+        case 'W': {
+          // castle gate — crumbles when King Dad is bonked
+          ctx.fillStyle = '#5a5266'; ctx.fillRect(x, y, TILE, TILE);
+          ctx.fillStyle = '#6e6580';
+          ctx.fillRect(x+2, y+2, 12, 12); ctx.fillRect(x+18, y+2, 12, 12);
+          ctx.fillRect(x+2, y+18, 12, 12); ctx.fillRect(x+18, y+18, 12, 12);
+          ctx.fillStyle = '#3d3748';
+          ctx.fillRect(x+6, y, 4, TILE); ctx.fillRect(x+22, y, 4, TILE);
+          if (Math.random() < 0.008) sparkle(x + Math.random()*TILE, y + Math.random()*TILE, '#c9b26a');
+          break;
+        }
         case 'F': drawFlag(x, y); break;
         case ',': drawDeco(x, y, pal, c); break;
       }
@@ -1561,6 +2112,17 @@ function drawEnemies(){
     let img;
     if (e.kind === 'grumblin'){
       img = e.squash > 0 ? sprites.grumblin.squash : (Math.floor(e.animT*6)%2 ? sprites.grumblin.walk1 : sprites.grumblin.walk2);
+    } else if (e.kind === 'prickle'){
+      img = Math.floor(e.animT*5)%2 ? sprites.prickle.walk1 : sprites.prickle.walk2;
+    } else if (e.kind === 'hoppit'){
+      img = e.onGround ? sprites.hoppit.sit : sprites.hoppit.jump;
+    } else if (e.kind === 'roly'){
+      if (!e.shell) img = Math.floor(e.animT*6)%2 ? sprites.roly.walk1 : sprites.roly.walk2;
+      else if (e.sliding) img = Math.floor(e.animT*14)%2 ? sprites.roly.spin1 : sprites.roly.spin2;
+      else img = sprites.roly.shell;
+    } else if (e.kind === 'king'){
+      if (e.hurtT > 0 && Math.floor(G.time*14)%2 === 0 && e.squash <= 0) continue; // ouch flicker
+      img = e.onGround ? sprites.king.stand : sprites.king.hop;
     } else {
       img = e.squash > 0 ? sprites.flapjack.fly2 : (Math.floor(e.animT*8)%2 ? sprites.flapjack.fly1 : sprites.flapjack.fly2);
     }
@@ -1571,10 +2133,25 @@ function drawEnemies(){
     if (e.squash > 0) ctx.scale(1, 0.5);
     ctx.drawImage(img, -img.width/2, -img.height);
     ctx.restore();
+    if (e.kind === 'king' && e.squash <= 0){
+      for (let i=0;i<3;i++)
+        drawHeart(e.x + e.w/2 - 22 + i*22, e.y - 16, 7, i < e.hp ? '#ff5252' : 'rgba(255,255,255,0.25)');
+    }
     if (e.squash > 0.3){
       ctx.fillStyle = '#fff'; ctx.font = 'bold 11px monospace'; ctx.textAlign='center';
-      ctx.fillText('oof', e.x + e.w/2, e.y - 4);
+      ctx.fillText(e.kind === 'king' ? 'royal oof' : 'oof', e.x + e.w/2, e.y - 4);
     }
+  }
+}
+function drawMum(){
+  if (!G.mum || G.inBonus) return;
+  const m = G.mum;
+  const img = Math.floor(m.animT*2)%2 ? sprites.mum.wave : sprites.mum.idle;
+  ctx.drawImage(img, m.x - 2, m.y + Math.sin(m.animT*3)*1.5);
+  if (!m.saved){
+    ctx.font = 'bold 12px monospace'; ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.fillText('MUM!', m.x + 12, m.y - 10 + Math.sin(m.animT*4)*2);
   }
 }
 function drawPlayer(){
@@ -1593,6 +2170,8 @@ function drawPlayer(){
   ctx.translate(cx, p.y + p.h);
   if (p.facing < 0) ctx.scale(-1,1);
   if (G.state === 'DYING') ctx.scale(1,-1);
+  if (p.landT > 0) ctx.scale(1 + p.landT*1.6, 1 - p.landT*1.8);          // landing squash
+  else if (!p.onGround && p.vy < -300) ctx.scale(0.92, 1.08);            // jump stretch
   ctx.drawImage(img, -img.width/2, -img.height + 2);
   ctx.restore();
 }
@@ -1606,6 +2185,8 @@ function drawParticles(){
       ctx.fillText(Math.floor(pt.t*4)%2 ? '♪' : '♫', pt.x, pt.y);
     } else if (pt.star){
       drawStarShape(pt.x, pt.y, pt.size*2, pt.color, null);
+    } else if (pt.heart){
+      drawHeart(pt.x, pt.y, pt.size, pt.color);
     } else {
       ctx.fillStyle = pt.color;
       ctx.fillRect(pt.x - pt.size/2, pt.y - pt.size/2, pt.size, pt.size);
@@ -1792,19 +2373,21 @@ function drawWin(){
   drawParticles();
   ctx.restore();
   bigText('🏆 YOU WIN! 🏆', 110, 52, '#ffd23e');
-  bigText('ORION SAVED THE DAY!', 165, 30, '#fff');
+  bigText('ORION SAVED MUM AND THE DAY!', 165, 28, '#fff');
   const s = G.stats;
   const lines = [
     ['Enemies bonked', s.bonks],
     ['Stars collected', s.stars],
     ['Tacos consumed', s.tacos],
     ['Secrets found', s.secrets],
+    ['Dads dethroned', s.kings],
+    ['Mums rescued', s.mums],
     ['Gravity lessons learned', s.deaths],
     ['Mysterious toots', s.toots],
   ];
   ctx.font = 'bold 19px monospace';
   lines.forEach((ln, i)=>{
-    const y = 230 + i*34;
+    const y = 225 + i*29;
     ctx.textAlign = 'right'; ctx.fillStyle = '#cfc3f0';
     ctx.fillText(ln[0] + ' ', W/2 + 40, y);
     ctx.textAlign = 'left'; ctx.fillStyle = '#ffd23e';
