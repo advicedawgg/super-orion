@@ -7,6 +7,7 @@ This is a kid's 2D platformer. **Everything lives in one file: `index.html`** (e
 1. **Only touch the `LEVELS` array** (and the level list in `README.md`) unless explicitly asked to change engine code.
 2. **Never change physics constants** (`GRAV`, `JUMP_V`, `SPRING_V`, `MOVE_ACC`, `MAX_SPD`). Every level is balanced around them.
 3. **Never edit or delete existing levels** unless explicitly asked.
+3b. **The LAST entry in `LEVELS` is the secret Star Road (`secret:true`). Insert new story levels BEFORE it, never after it.** The level just before the secret one is the story finale (beats to the WIN screen); `secret:true` levels also end at WIN and unlock via 10/10 Star Champion badges, not progression.
 4. **Never hand-type map rows.** You WILL miscount spaces. Always generate rows with the `put(row, col, str)` script method (see workflow below).
 5. A level change is **not done** until `node levelcheck.js index.html` prints `RESULT: PASS`. Paste that output in your final answer as proof.
 

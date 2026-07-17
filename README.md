@@ -24,7 +24,7 @@ With a controller (Steam Deck, Xbox, etc.): **d-pad / left stick** move, **A or 
 Or just play it anywhere: **https://orion.advicedawg.com**
 
 ## The game
-- **10 levels across 2 worlds:**
+- **10 levels across 2 worlds** (…plus something hidden):
   - *World 1:* Grassy Greens → Cookie Caves → Sky Snack Summit → Soda Springs → Star Fortress → Cotton Candy Clouds
   - *World 2:* Bubbly Beach → Ice Cream Peaks (slippery!) → Taco Volcano → **King Dad's Castle**
 - Collect **gold stars** (Orion = constellation, get it?), bounce on springs, break bricks, bump `?` blocks, and touch the star flag to win.
@@ -49,6 +49,7 @@ Or just play it anywhere: **https://orion.advicedawg.com**
 | 🌮 **Taco Power** | Hidden in special `?` blocks — super speed! Also try *typing* `taco`... |
 | 👨 **Dad Joke** | Type `dad` any time. King Dad delivers. You cannot stop him. |
 | 💕 **Mum's Love** | Type `love` while playing — Mum refills your hearts! (She needs a breather between rescues: ~40s) |
+| 🌈 **The ????? card** | There's a mysterious card on the level select screen. Earn the ⭐ Star Champion badge (collect *every* star) on **all 10 levels** and… a rainbow road appears. |
 | 🤭 **The Toot** | Press duck (↓) 5 times quickly. "Oops. Beans for breakfast." |
 | 🧱 **The Wall** | Push against a wall for a few seconds. The wall wins. |
 | 🚀 **Maximum Boing** | Jump 12 times in a row as fast as possible. Confetti! |

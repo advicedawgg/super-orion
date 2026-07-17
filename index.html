@@ -121,7 +121,8 @@ if ('ontouchstart' in window){
         const r = selectCardRect(i);
         if (tx >= r.x && tx <= r.x + r.w && ty >= r.y && ty <= r.y + r.h){
           G.selIdx = i;
-          if (i <= save.unlocked) startRun(i);
+          if (canPlayLevel(i)) startRun(i);
+          else if (LEVELS[i].secret){ SFX.bump(); announce('Collect ⭐ on ALL ' + SECRET_IDX + ' levels to unlock!', 2); }
           else { SFX.bump(); announce('Locked! Beat the level before it.', 1.5); }
           return;
         }
@@ -1030,7 +1031,38 @@ const LEVELS = [
   ],
   bonus:null, bonusSpawn:null, mainReturn:null,
 },
+{
+  name:'Star Road', sub:'Secret', secret:true,
+  palette:{ skyTop:'#0b1030', skyBot:'#3b2a6e', ground:'#f7e07a', groundTop:'#fff3b0', brick:'#ffd23e',
+            hill:'#1c1748', hill2:'#282060', deco:'star', bgStars:true },
+  music:{ bpm:175, transpose:9, wave:'sine' },
+  main:[
+'                                                                                                                        ',
+'                                                                                                                        ',
+'                                                                                                                        ',
+'                                                                                                                        ',
+'                                                                                                                        ',
+'                                                                                                                        ',
+'                                                                                                                        ',
+'                                                                                                                        ',
+'                                          oooo                                    oooo                                  ',
+'                                          ####                V                   ####                     V            ',
+'                                                                                                                        ',
+'                        ?T?                         U               ?o?                             T                   ',
+'               ooo                 ooo                 ooo                 ooo                 ooo                      ',
+'                                                                                                                        ',
+'   p   ,            R       E  ,        S       J  ,            E      ,        S       J  ,            R    ,  F       ',
+'###############   #################   #################   #################   #################   ######################',
+'xxxxxxxxxxxxxxx   xxxxxxxxxxxxxxxxx   xxxxxxxxxxxxxxxxx   xxxxxxxxxxxxxxxxx   xxxxxxxxxxxxxxxxx   xxxxxxxxxxxxxxxxxxxxxx',
+  ],
+  bonus:null, bonusSpawn:null, mainReturn:null,
+},
 ];
+
+/* ---- secret level plumbing ---- */
+const SECRET_IDX = (i => i < 0 ? LEVELS.length : i)(LEVELS.findIndex(L => L.secret));
+function champCount(){ return save.champs.slice(0, SECRET_IDX).filter(Boolean).length; }
+function canPlayLevel(i){ return LEVELS[i].secret ? champCount() >= SECRET_IDX : i <= save.unlocked; }
 
 /* ================= FUNNY TEXT BANKS ================= */
 const STOMP_QUIPS = ['BONK!','Boop!','Yeet!','Squish!','Sorry, not sorry!','Outta my way!','Bonk-a-donk!','Get bonked!'];
@@ -1206,6 +1238,7 @@ function loadLevel(idx, keepScore=true){
     for (const row of G.bonusGrid) for (const ch of row) if (ch === 'o' || ch === '?') G.totalStars++;
   }
   startMusic(L.music);
+  if (L.secret){ G.rainbow = true; announce('🌈 WELCOME TO THE STAR ROAD! 🌈', 3); }
   G.state = 'STARTCARD'; G.stateTimer = 1.6;
 }
 function startRun(idx){
@@ -1539,7 +1572,7 @@ function levelClear(){
   G.score += 1000;
   save.beaten[G.levelIdx] = true;
   if (G.stars >= G.totalStars && G.totalStars > 0) save.champs[G.levelIdx] = true;
-  save.unlocked = Math.max(save.unlocked, Math.min(G.levelIdx + 1, LEVELS.length - 1));
+  save.unlocked = Math.max(save.unlocked, Math.min(G.levelIdx + 1, SECRET_IDX - 1)); // Star Road unlocks by champs, not progression
   writeSave();
   if (G.stars >= G.totalStars && G.totalStars > 0){
     G.score += 1000;
@@ -1802,7 +1835,8 @@ function update(dt){
       if (justDown.right){ G.selIdx = (G.selIdx + 1) % LEVELS.length; SFX.pop(); }
       if (justDown.pause){ G.state = 'TITLE'; break; }
       if (justDown.enter || justDown.jump){
-        if (G.selIdx <= save.unlocked) startRun(G.selIdx);
+        if (canPlayLevel(G.selIdx)) startRun(G.selIdx);
+        else if (LEVELS[G.selIdx].secret){ SFX.bump(); announce('Collect ⭐ on ALL ' + SECRET_IDX + ' levels to unlock!', 2); }
         else { SFX.bump(); announce('Locked! Beat the level before it.', 1.5); }
       }
       break;
@@ -1851,7 +1885,9 @@ function update(dt){
       updateParticles(dt);
       if (G.msgTimer > 0) G.msgTimer -= dt;
       if (G.stateTimer > 2.2 && (justDown.enter || justDown.jump || G.stateTimer > 5)){
-        if (G.levelIdx + 1 < LEVELS.length) loadLevel(G.levelIdx + 1);
+        const nextIdx = G.levelIdx + 1;
+        // story continues level to level; the castle finale and the Star Road both end at the win screen
+        if (nextIdx < LEVELS.length && !LEVELS[nextIdx].secret && !LEVELS[G.levelIdx].secret) loadLevel(nextIdx);
         else {
           G.state = 'WIN'; G.stateTimer = 0; stopMusic(); G.camX = 0; G.camY = 0;
           save.bestScore = Math.max(save.bestScore || 0, G.score); writeSave();
@@ -2427,7 +2463,7 @@ function drawTitle(){
   ctx.fillRect(0, H - 78, W, 14);
   if (Math.floor(G.time*1.6)%2 === 0) bigText('PRESS ENTER (or tap) TO START', 320, 24, '#fff');
   if (save.bestScore || save.beaten.filter(Boolean).length){
-    bigText('Beaten ' + save.beaten.filter(Boolean).length + '/' + LEVELS.length +
+    bigText('Beaten ' + save.beaten.slice(0, SECRET_IDX).filter(Boolean).length + '/' + SECRET_IDX +
             (save.bestScore ? '    Best score ' + save.bestScore : ''), 352, 14, '#ffd23e');
   }
   bigText('← → / A D move    SPACE / ↑ jump    ↓ duck', 380, 15, '#e8d9ff');
@@ -2459,11 +2495,13 @@ function drawSelect(){
   ctx.fillText('WORLD 2', selectCardRect(6).x, 272);
   for (let i=0;i<LEVELS.length;i++){
     const L = LEVELS[i], r = selectCardRect(i);
-    const unlocked = i <= save.unlocked;
+    const unlocked = canPlayLevel(i);
     const sel = i === G.selIdx;
     const bob = sel ? Math.sin(G.time*5)*3 : 0;
     ctx.globalAlpha = unlocked ? 1 : 0.45;
-    ctx.fillStyle = unlocked ? L.palette.skyTop : '#3a3352';
+    if (L.secret && unlocked) ctx.fillStyle = 'hsl(' + Math.floor(G.time*70)%360 + ',75%,58%)';   // rainbow shimmer
+    else if (L.secret) ctx.fillStyle = '#241f3d';
+    else ctx.fillStyle = unlocked ? L.palette.skyTop : '#3a3352';
     roundRect(r.x, r.y - bob, r.w, r.h, 10); ctx.fill();
     ctx.fillStyle = 'rgba(0,0,0,0.25)';
     roundRect(r.x, r.y - bob + r.h - 30, r.w, 30, 10); ctx.fill();
@@ -2475,10 +2513,11 @@ function drawSelect(){
     ctx.fillStyle = '#fff';
     ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 3;
     const midX = r.x + r.w/2;
-    ctx.strokeText(L.sub.replace('World ',''), midX, r.y - bob + 34);
-    ctx.fillText(L.sub.replace('World ',''), midX, r.y - bob + 34);
+    const subTxt = L.secret ? (unlocked ? '★' : '?') : L.sub.replace('World ','');
+    ctx.strokeText(subTxt, midX, r.y - bob + 34);
+    ctx.fillText(subTxt, midX, r.y - bob + 34);
     ctx.font = 'bold 11px monospace';
-    const label = unlocked ? L.name : '🔒 LOCKED';
+    const label = L.secret ? (unlocked ? '★ ' + L.name + ' ★' : '?????') : (unlocked ? L.name : '🔒 LOCKED');
     ctx.fillStyle = unlocked ? '#fff' : '#cbc3e0';
     ctx.fillText(label, midX, r.y - bob + r.h - 11);
     if (save.beaten[i]){
@@ -2489,11 +2528,15 @@ function drawSelect(){
     ctx.globalAlpha = 1;
   }
   const selL = LEVELS[G.selIdx];
-  const canPlay = G.selIdx <= save.unlocked;
-  bigText(canPlay ? selL.sub + ': ' + selL.name : 'Beat the level before this one!', 428, 22, canPlay ? '#fff' : '#ff9d9d');
+  const canPlay = canPlayLevel(G.selIdx);
+  const banner = canPlay ? (selL.secret ? '★ ' + selL.name + ' ★' : selL.sub + ': ' + selL.name)
+    : selL.secret ? 'Collect ⭐ on ALL ' + SECRET_IDX + ' levels to open this…'
+    : 'Beat the level before this one!';
+  bigText(banner, 428, 22, canPlay ? '#fff' : '#ff9d9d');
   if (Math.floor(G.time*1.6)%2 === 0) bigText('← → pick    ENTER / tap to play    P back', 468, 16, '#e8d9ff');
-  const done = save.beaten.filter(Boolean).length, champs = save.champs.filter(Boolean).length;
-  bigText('Beaten ' + done + '/' + LEVELS.length + '    ⭐ Star Champion ' + champs + '/' + LEVELS.length +
+  const done = save.beaten.slice(0, SECRET_IDX).filter(Boolean).length;
+  const champs = champCount();
+  bigText('Beaten ' + done + '/' + SECRET_IDX + '    ⭐ Star Champion ' + champs + '/' + SECRET_IDX +
           (save.bestScore ? '    Best score ' + save.bestScore : ''), 510, 14, '#c9b6ee');
 }
 function drawStartCard(L){
