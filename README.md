@@ -14,6 +14,7 @@ A silly, charming 2D platformer made for Orion. No installs, no internet needed.
 | P | Pause (with very helpful "tips") |
 | M | Music on/off |
 | R | Restart level |
+| F | Fullscreen |
 | ENTER | Start / continue |
 
 On a tablet or phone, on-screen buttons appear automatically.
@@ -34,6 +35,7 @@ Or just play it anywhere: **https://orion.advicedawg.com**
   - 🐢 **Rolypolys** — stomp once → shell. Touch the shell → it rockets off and *bowls over every enemy in its path*. Ten-pin bonking!
 - **The story:** King Dad 👑 (bald, magnificent beard) has declared "no rescuing Mum before dinner!" Fight through his castle, bonk him **3 times**, and the gate crumbles — then run to **Mum** for the big rescue. 💕
 - Weather! Bubbles float up at the beach, snow falls on the peaks, embers rise in the volcano.
+- **Progress saves automatically** (in the browser). Beating a level unlocks the next one on the **level select screen** — with ✓ badges for beaten levels and a ⭐ badge for collecting *every* star in a level (Star Champion!). Best score is remembered too.
 - Kid-friendly: 3 hearts per life, 5 lives, infinite continues, and the Game Over screen just suggests a snack break.
 
 ## 🤫 Parent's Secret Easter Egg Guide
@@ -45,6 +47,8 @@ Or just play it anywhere: **https://orion.advicedawg.com**
 | 🌈 **Rainbow Mode** | Type the letters `O-R-I-O-N` on the keyboard any time. Rainbow trail! Type it again to turn off. |
 | 🧠 **Big Brain Mode** | The Konami code: ↑ ↑ ↓ ↓ ← → ← → B A. Giant head. |
 | 🌮 **Taco Power** | Hidden in special `?` blocks — super speed! Also try *typing* `taco`... |
+| 👨 **Dad Joke** | Type `dad` any time. King Dad delivers. You cannot stop him. |
+| 💕 **Mum's Love** | Type `love` while playing — Mum refills your hearts! (She needs a breather between rescues: ~40s) |
 | 🤭 **The Toot** | Press duck (↓) 5 times quickly. "Oops. Beans for breakfast." |
 | 🧱 **The Wall** | Push against a wall for a few seconds. The wall wins. |
 | 🚀 **Maximum Boing** | Jump 12 times in a row as fast as possible. Confetti! |

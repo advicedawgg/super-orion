@@ -17,6 +17,7 @@
     pointer-events:auto;user-select:none;-webkit-user-select:none;}
   .tbtn:active{background:rgba(255,255,255,.35);}
   #tLeft{left:4vw;} #tRight{left:calc(4vw + 18vmin + 12px);} #tJump{right:4vw;width:20vmin;height:20vmin;} #tDown{right:calc(4vw + 20vmin + 12px);}
+  #tFull{top:8px;right:8px;bottom:auto;width:9vmin;height:9vmin;min-width:44px;min-height:44px;font-size:4vmin;display:none;}
 </style>
 </head>
 <body>
@@ -26,6 +27,7 @@
   <div class="tbtn" id="tRight">▶</div>
   <div class="tbtn" id="tJump">A</div>
   <div class="tbtn" id="tDown">▼</div>
+  <div class="tbtn" id="tFull">⛶</div>
 </div>
 <script>
 'use strict';
@@ -54,8 +56,15 @@ const KEYMAP = {
   ArrowRight:'right', KeyD:'right',
   ArrowUp:'jump', KeyW:'jump', Space:'jump',
   ArrowDown:'down', KeyS:'down',
-  Enter:'enter', KeyP:'pause', KeyM:'mute', KeyR:'restart'
+  Enter:'enter', KeyP:'pause', KeyM:'mute', KeyR:'restart', KeyF:'fullscr'
 };
+function toggleFullscreen(){
+  const el = document.getElementById('wrap');
+  try{
+    if (document.fullscreenElement) document.exitFullscreen();
+    else if (el.requestFullscreen) el.requestFullscreen().catch(()=>{});
+  }catch(e){ /* iOS Safari has no element fullscreen — quietly ignore */ }
+}
 const GAME_CODES = new Set(Object.keys(KEYMAP));
 let typedBuffer = '';            // for ORION code
 let konamiIdx = 0;
@@ -70,6 +79,8 @@ window.addEventListener('keydown', e=>{
       typedBuffer = (typedBuffer + e.key.toLowerCase()).slice(-10);
       if (typedBuffer.endsWith('orion')) triggerRainbow();
       if (typedBuffer.endsWith('taco'))  triggerFreeTaco();
+      if (typedBuffer.endsWith('dad'))   triggerDadJoke();
+      if (typedBuffer.endsWith('love'))  triggerMumLove();   // 'mum' would hit the M mute key twice
     }
     const a = KEYMAP[e.code];
     if (a && !(a === 'restart' && typedBuffer.endsWith('or'))){ keys[a] = true; justDown[a] = true; }
@@ -97,7 +108,28 @@ if ('ontouchstart' in window){
     el.addEventListener('pointerleave',  ()=>{ keys[action]=false; });
   };
   bind('tLeft','left'); bind('tRight','right'); bind('tJump','jump'); bind('tDown','down');
-  cv.addEventListener('pointerdown', ()=>{ initAudio(); justDown.enter = true; });
+  document.getElementById('tFull').style.display = 'flex';
+  document.getElementById('tFull').addEventListener('pointerdown', e=>{ e.preventDefault(); initAudio(); toggleFullscreen(); });
+  cv.addEventListener('pointerdown', (e)=>{
+    initAudio();
+    if (G.state === 'SELECT'){
+      // map tap to a level card
+      const rect = cv.getBoundingClientRect();
+      const tx = (e.clientX - rect.left) / rect.width * W;
+      const ty = (e.clientY - rect.top) / rect.height * H;
+      for (let i=0;i<LEVELS.length;i++){
+        const r = selectCardRect(i);
+        if (tx >= r.x && tx <= r.x + r.w && ty >= r.y && ty <= r.y + r.h){
+          G.selIdx = i;
+          if (i <= save.unlocked) startRun(i);
+          else { SFX.bump(); announce('Locked! Beat the level before it.', 1.5); }
+          return;
+        }
+      }
+      return;
+    }
+    justDown.enter = true;
+  });
 }
 
 // gamepad (Steam Deck / any standard pad): d-pad or left stick = move, A/B = jump
@@ -231,6 +263,13 @@ function playNote(freq, dur, type, vol, when){
   o.connect(g); g.connect(musicGain);
   o.start(when); o.stop(when + dur + 0.02);
 }
+
+/* ================= SAVE DATA ================= */
+const SAVE_KEY = 'superOrionSave';
+const save = { unlocked:0, beaten:[], champs:[], bestScore:0, muted:false };
+try { Object.assign(save, JSON.parse(localStorage.getItem(SAVE_KEY)) || {}); } catch(e){}
+function writeSave(){ try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch(e){} }
+muted = !!save.muted;
 
 /* ================= PIXEL SPRITES ================= */
 const PAL = {
@@ -1030,8 +1069,9 @@ const G = {
   pauseTip:'',
   stats:{ bonks:0, stars:0, deaths:0, tacos:0, secrets:0, toots:0, kings:0, mums:0 },
   mum:null,
+  selIdx:0,
   // easter egg flags
-  bigHead:false, rainbow:false,
+  bigHead:false, rainbow:false, mumLoveT:0,
   msgTimer:0, msgText:'',
   fireworkTimer:0,
   pipeAnim:null,
@@ -1076,6 +1116,27 @@ function triggerFreeTaco(){
   player.tacoTimer = 8; G.stats.tacos++;
   announce('FREE TACO! How did you know?!');
   SFX.taco();
+}
+const DAD_JOKES = [
+  'Why did the bike fall over? It was TWO-TIRED!',
+  'I only know 25 letters. I don\'t know Y!',
+  'What do you call cheese that isn\'t yours? NACHO CHEESE!',
+  'Why did the cookie cry? Its mum was a WAFER too long!',
+  'I\'m reading a book about gravity. Can\'t put it down!',
+  'What do you call a fake noodle? An IMPASTA!',
+];
+function triggerDadJoke(){
+  announce('KING DAD: "' + DAD_JOKES[Math.floor(Math.random()*DAD_JOKES.length)] + '"', 3.5);
+  SFX.toot();
+}
+function triggerMumLove(){
+  if (G.state !== 'PLAY' || G.mumLoveT > 0) return;
+  G.mumLoveT = 40;
+  G.hearts = 3;
+  announce('MUM SENDS HER LOVE! Hearts refilled! ❤', 3);
+  SFX.oneup();
+  for (let i=0;i<10;i++) G.particles.push({ x:player.x + player.w/2, y:player.y, vx:(Math.random()-0.5)*140, vy:-60-Math.random()*100,
+    life:1.5, t:0, grav:-30, color:'#ff6b9d', size:4+Math.random()*4, flutter:3, heart:true });
 }
 
 /* particles */
@@ -1146,6 +1207,11 @@ function loadLevel(idx, keepScore=true){
   }
   startMusic(L.music);
   G.state = 'STARTCARD'; G.stateTimer = 1.6;
+}
+function startRun(idx){
+  G.score = 0; G.lives = 5; G.foundSecret = false;
+  G.stats = { bonks:0, stars:0, deaths:0, tacos:0, secrets:0, toots:0, kings:0, mums:0 };
+  loadLevel(idx);
 }
 function makeGrumblin(x, footY){
   return { kind:'grumblin', x, y: footY - 20, w:22, h:20, vx:-40, vy:0, dir:-1, squash:0, dead:false, animT:Math.random() };
@@ -1471,6 +1537,10 @@ function levelClear(){
   stopMusic(); SFX.flag();
   player.vx = 0; player.vy = 0;
   G.score += 1000;
+  save.beaten[G.levelIdx] = true;
+  if (G.stars >= G.totalStars && G.totalStars > 0) save.champs[G.levelIdx] = true;
+  save.unlocked = Math.max(save.unlocked, Math.min(G.levelIdx + 1, LEVELS.length - 1));
+  writeSave();
   if (G.stars >= G.totalStars && G.totalStars > 0){
     G.score += 1000;
     announce('STAR CHAMPION! All ' + G.totalStars + ' stars! +1000');
@@ -1710,18 +1780,30 @@ function update(dt){
   tickMusic();
   if (justDown.mute){
     muted = !muted;
+    save.muted = muted; writeSave();
     if (!muted && AC) music.nextTime = AC.currentTime + 0.1; // resync — no catch-up note burst
     announce(muted ? 'Music off. Silence...' : 'Music on!', 1.2);
   }
+  if (justDown.fullscr) toggleFullscreen();
 
   switch (G.state){
     case 'TITLE':
       updateParticles(dt);
       if (G.msgTimer > 0) G.msgTimer -= dt;
       if (justDown.enter || justDown.jump){
-        G.score = 0; G.lives = 5; G.foundSecret = false;
-        G.stats = { bonks:0, stars:0, deaths:0, tacos:0, secrets:0, toots:0, kings:0, mums:0 };
-        loadLevel(0);
+        G.selIdx = Math.min(save.unlocked, LEVELS.length - 1);
+        G.state = 'SELECT';
+        SFX.pop();
+      }
+      break;
+    case 'SELECT':
+      if (G.msgTimer > 0) G.msgTimer -= dt;
+      if (justDown.left){  G.selIdx = (G.selIdx + LEVELS.length - 1) % LEVELS.length; SFX.pop(); }
+      if (justDown.right){ G.selIdx = (G.selIdx + 1) % LEVELS.length; SFX.pop(); }
+      if (justDown.pause){ G.state = 'TITLE'; break; }
+      if (justDown.enter || justDown.jump){
+        if (G.selIdx <= save.unlocked) startRun(G.selIdx);
+        else { SFX.bump(); announce('Locked! Beat the level before it.', 1.5); }
       }
       break;
     case 'STARTCARD':
@@ -1737,6 +1819,7 @@ function update(dt){
       updateParticles(dt);
       updateCamera(dt);
       if (G.msgTimer > 0) G.msgTimer -= dt;
+      G.mumLoveT = Math.max(0, G.mumLoveT - dt);
       break;
     case 'PAUSE':
       if (justDown.pause || justDown.enter) G.state = 'PLAY';
@@ -1769,7 +1852,10 @@ function update(dt){
       if (G.msgTimer > 0) G.msgTimer -= dt;
       if (G.stateTimer > 2.2 && (justDown.enter || justDown.jump || G.stateTimer > 5)){
         if (G.levelIdx + 1 < LEVELS.length) loadLevel(G.levelIdx + 1);
-        else { G.state = 'WIN'; G.stateTimer = 0; stopMusic(); G.camX = 0; G.camY = 0; }
+        else {
+          G.state = 'WIN'; G.stateTimer = 0; stopMusic(); G.camX = 0; G.camY = 0;
+          save.bestScore = Math.max(save.bestScore || 0, G.score); writeSave();
+        }
       }
       break;
     case 'GAMEOVER':
@@ -1810,6 +1896,11 @@ function draw(){
   if (G.state === 'TITLE'){
     drawTitle();
     ctx.save(); ctx.translate(-Math.floor(G.camX), -Math.floor(G.camY)); drawParticles(); ctx.restore();
+    if (G.msgTimer > 0) drawAnnounce();
+    return;
+  }
+  if (G.state === 'SELECT'){
+    drawSelect();
     if (G.msgTimer > 0) drawAnnounce();
     return;
   }
@@ -2335,9 +2426,75 @@ function drawTitle(){
   ctx.fillStyle = '#58c443';
   ctx.fillRect(0, H - 78, W, 14);
   if (Math.floor(G.time*1.6)%2 === 0) bigText('PRESS ENTER (or tap) TO START', 320, 24, '#fff');
+  if (save.bestScore || save.beaten.filter(Boolean).length){
+    bigText('Beaten ' + save.beaten.filter(Boolean).length + '/' + LEVELS.length +
+            (save.bestScore ? '    Best score ' + save.bestScore : ''), 352, 14, '#ffd23e');
+  }
   bigText('← → / A D move    SPACE / ↑ jump    ↓ duck', 380, 15, '#e8d9ff');
-  bigText('P pause    M music    R restart level', 408, 15, '#e8d9ff');
+  bigText('P pause    M music    R restart    F fullscreen', 408, 15, '#e8d9ff');
   bigText('Psst… try standing still for a while. Or typing things…', 450, 13, '#c9b6ee');
+}
+function selectCardRect(i){
+  const cw = 150, ch = 88, gap = 10;
+  const row = i < 6 ? 0 : 1, col = row ? i - 6 : i;   // World 1 = 6 cards, World 2 = 4
+  const count = row ? LEVELS.length - 6 : 6;
+  const x = (W - (count*cw + (count-1)*gap))/2 + col*(cw+gap);
+  const y = 150 + row*(ch+46);
+  return { x, y, w:cw, h:ch };
+}
+function drawSelect(){
+  const grad = ctx.createLinearGradient(0,0,0,H);
+  grad.addColorStop(0,'#1c1440'); grad.addColorStop(1,'#4a2a78');
+  ctx.fillStyle = grad; ctx.fillRect(0,0,W,H);
+  for (let i=0;i<40;i++){
+    const x = (i*211) % W, y = (i*127) % (H*0.9);
+    ctx.globalAlpha = 0.15 + ((Math.sin(G.time*2 + i)+1)/2)*0.5;
+    ctx.fillStyle = '#fff'; ctx.fillRect(x, y, 2, 2);
+  }
+  ctx.globalAlpha = 1;
+  bigText('PICK A LEVEL', 66, 40, '#ffd23e');
+  ctx.font = 'bold 16px monospace'; ctx.textAlign = 'left';
+  ctx.fillStyle = '#b9a8e8';
+  ctx.fillText('WORLD 1', selectCardRect(0).x, 138);
+  ctx.fillText('WORLD 2', selectCardRect(6).x, 272);
+  for (let i=0;i<LEVELS.length;i++){
+    const L = LEVELS[i], r = selectCardRect(i);
+    const unlocked = i <= save.unlocked;
+    const sel = i === G.selIdx;
+    const bob = sel ? Math.sin(G.time*5)*3 : 0;
+    ctx.globalAlpha = unlocked ? 1 : 0.45;
+    ctx.fillStyle = unlocked ? L.palette.skyTop : '#3a3352';
+    roundRect(r.x, r.y - bob, r.w, r.h, 10); ctx.fill();
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    roundRect(r.x, r.y - bob + r.h - 30, r.w, 30, 10); ctx.fill();
+    ctx.strokeStyle = sel ? '#ffd23e' : 'rgba(255,255,255,0.35)';
+    ctx.lineWidth = sel ? 4 : 2;
+    roundRect(r.x, r.y - bob, r.w, r.h, 10); ctx.stroke();
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 22px monospace';
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 3;
+    const midX = r.x + r.w/2;
+    ctx.strokeText(L.sub.replace('World ',''), midX, r.y - bob + 34);
+    ctx.fillText(L.sub.replace('World ',''), midX, r.y - bob + 34);
+    ctx.font = 'bold 11px monospace';
+    const label = unlocked ? L.name : '🔒 LOCKED';
+    ctx.fillStyle = unlocked ? '#fff' : '#cbc3e0';
+    ctx.fillText(label, midX, r.y - bob + r.h - 11);
+    if (save.beaten[i]){
+      ctx.font = 'bold 16px monospace'; ctx.fillStyle = '#7bff7b';
+      ctx.fillText('✓', r.x + r.w - 14, r.y - bob + 20);
+    }
+    if (save.champs[i]) drawStarShape(r.x + 14, r.y - bob + 15, 8, '#ffd23e', '#c79a13');
+    ctx.globalAlpha = 1;
+  }
+  const selL = LEVELS[G.selIdx];
+  const canPlay = G.selIdx <= save.unlocked;
+  bigText(canPlay ? selL.sub + ': ' + selL.name : 'Beat the level before this one!', 428, 22, canPlay ? '#fff' : '#ff9d9d');
+  if (Math.floor(G.time*1.6)%2 === 0) bigText('← → pick    ENTER / tap to play    P back', 468, 16, '#e8d9ff');
+  const done = save.beaten.filter(Boolean).length, champs = save.champs.filter(Boolean).length;
+  bigText('Beaten ' + done + '/' + LEVELS.length + '    ⭐ Star Champion ' + champs + '/' + LEVELS.length +
+          (save.bestScore ? '    Best score ' + save.bestScore : ''), 510, 14, '#c9b6ee');
 }
 function drawStartCard(L){
   overlay(0.75);
@@ -2374,6 +2531,13 @@ function drawWin(){
   ctx.restore();
   bigText('🏆 YOU WIN! 🏆', 110, 52, '#ffd23e');
   bigText('ORION SAVED MUM AND THE DAY!', 165, 28, '#fff');
+  // the family, reunited (King Dad sulks, squashed)
+  ctx.drawImage(sprites.orion[Math.floor(G.time*4)%2 ? 'dance1' : 'dance2'], W/2 - 80, 183);
+  ctx.drawImage(sprites.mum[Math.floor(G.time*2)%2 ? 'wave' : 'idle'], W/2 - 16, 183);
+  ctx.save();
+  ctx.translate(W/2 + 64, 215); ctx.scale(1, 0.5);
+  ctx.drawImage(sprites.king.stand, -24, -42);
+  ctx.restore();
   const s = G.stats;
   const lines = [
     ['Enemies bonked', s.bonks],
@@ -2387,7 +2551,7 @@ function drawWin(){
   ];
   ctx.font = 'bold 19px monospace';
   lines.forEach((ln, i)=>{
-    const y = 225 + i*29;
+    const y = 248 + i*26;
     ctx.textAlign = 'right'; ctx.fillStyle = '#cfc3f0';
     ctx.fillText(ln[0] + ' ', W/2 + 40, y);
     ctx.textAlign = 'left'; ctx.fillStyle = '#ffd23e';
