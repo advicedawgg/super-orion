@@ -17,6 +17,7 @@
     pointer-events:auto;user-select:none;-webkit-user-select:none;}
   .tbtn:active{background:rgba(255,255,255,.35);}
   #tLeft{left:4vw;} #tRight{left:calc(4vw + 18vmin + 12px);} #tJump{right:4vw;width:20vmin;height:20vmin;} #tDown{right:calc(4vw + 20vmin + 12px);}
+  #tFire{right:4vw;bottom:calc(6vh + 20vmin);width:14vmin;height:14vmin;}
   #tFull{top:8px;right:8px;bottom:auto;width:9vmin;height:9vmin;min-width:44px;min-height:44px;font-size:4vmin;display:none;}
 </style>
 </head>
@@ -27,6 +28,7 @@
   <div class="tbtn" id="tRight">▶</div>
   <div class="tbtn" id="tJump">A</div>
   <div class="tbtn" id="tDown">▼</div>
+  <div class="tbtn" id="tFire">B</div>
   <div class="tbtn" id="tFull">⛶</div>
 </div>
 <script>
@@ -56,6 +58,7 @@ const KEYMAP = {
   ArrowRight:'right', KeyD:'right',
   ArrowUp:'jump', KeyW:'jump', Space:'jump',
   ArrowDown:'down', KeyS:'down',
+  KeyX:'fire',
   Enter:'enter', KeyP:'pause', KeyM:'mute', KeyR:'restart', KeyF:'fullscr'
 };
 function toggleFullscreen(){
@@ -107,7 +110,7 @@ if ('ontouchstart' in window){
     el.addEventListener('pointercancel', ()=>{ keys[action]=false; });
     el.addEventListener('pointerleave',  ()=>{ keys[action]=false; });
   };
-  bind('tLeft','left'); bind('tRight','right'); bind('tJump','jump'); bind('tDown','down');
+  bind('tLeft','left'); bind('tRight','right'); bind('tJump','jump'); bind('tDown','down'); bind('tFire','fire');
   document.getElementById('tFull').style.display = 'flex';
   document.getElementById('tFull').addEventListener('pointerdown', e=>{ e.preventDefault(); initAudio(); toggleFullscreen(); });
   cv.addEventListener('pointerdown', (e)=>{
@@ -149,6 +152,7 @@ function pollGamepad(){
     right: b(15) || ax(0) >  0.35,
     down:  b(13) || ax(1) >  0.5,
     jump:  b(0)  || b(1),
+    fire:  b(2)  || b(3),
     enter: b(9),
     pause: b(9),
     mute:  b(8),
@@ -221,6 +225,9 @@ const SFX = {
   bosshit(){ tone(160, 0.2, 'sawtooth', 0.15, 60); noiseBurst(0.12, 0.08); },
   bossdown(){ [48,52,55,60,64,67,72].forEach((m,i)=>tone(midi(m), 0.12, 'square', 0.12, null, i*0.09)); noiseBurst(0.3, 0.1); },
   hop(){ tone(200, 0.08, 'triangle', 0.07, 320); },
+  shoot(){ tone(500, 0.09, 'square', 0.09, 900); },
+  freeze(){ tone(midi(90), 0.12, 'sine', 0.1); tone(midi(94), 0.18, 'sine', 0.09, null, 0.08); },
+  shatter(){ noiseBurst(0.12, 0.1); tone(midi(88), 0.1, 'triangle', 0.08, null, 0.02); },
 };
 
 /* ---- music sequencer (original bouncy tune) ---- */
@@ -487,6 +494,34 @@ const TACO_FRAME = [
   ' tttttttttt ',
   '  tttttttt  ',
 ];
+// power-up pickups
+const BERRY_FRAME = [
+  '    qq  ',
+  '   TqT  ',
+  '  rrrr  ',
+  ' rrrrrr ',
+  ' rwrrrr ',
+  ' rrrrrr ',
+  '  rrrr  ',
+];
+const FIREFLOWER_FRAME = [
+  '  rYYr  ',
+  ' rYwwYr ',
+  ' rYwwYr ',
+  '  rYYr  ',
+  '   T    ',
+  '  TTT   ',
+  '   T    ',
+];
+const ICEFLOWER_FRAME = [
+  '  swws  ',
+  ' swccws ',
+  ' swccws ',
+  '  swws  ',
+  '   T    ',
+  '  TTT   ',
+  '   T    ',
+];
 // spiky — jumping on it is a bad idea
 const PRICKLE_FRAMES = {
   walk1:[
@@ -699,11 +734,27 @@ for (const k in ROLY_FRAMES) sprites.roly[k] = renderFrame(ROLY_FRAMES[k], SCALE
 for (const k in KING_FRAMES) sprites.king[k] = renderFrame(KING_FRAMES[k], 3);
 sprites.mum = {}; for (const k in MUM_FRAMES) sprites.mum[k] = renderFrame(MUM_FRAMES[k], SCALE);
 sprites.taco = renderFrame(TACO_FRAME, 3);
+sprites.berry = renderFrame(BERRY_FRAME, 3);
+sprites.fireflower = renderFrame(FIREFLOWER_FRAME, 3);
+sprites.iceflower = renderFrame(ICEFLOWER_FRAME, 3);
+// fire/ice Orion = same frames, recolored cap/shirt/pants
+function makeOrionSet(ov){
+  const saved = {};
+  for (const k in ov){ saved[k] = PAL[k]; PAL[k] = ov[k]; }
+  const set = { norm:{}, big:{} };
+  for (const k in ORION_FRAMES){ set.norm[k] = renderFrame(ORION_FRAMES[k], SCALE); set.big[k] = renderFrame(ORION_FRAMES[k], SCALE, true); }
+  for (const k in saved) PAL[k] = saved[k];
+  return set;
+}
+sprites.orionFire = makeOrionSet({ C:'#e53935', O:'#f4f4f4', B:'#c62828' });
+sprites.orionIce  = makeOrionSet({ C:'#40c4de', O:'#eafcff', B:'#2a7fa8' });
 
 /* ================= LEVELS =================
    Legend:
    '#' grass/cloud top   'x' dirt/stone      '=' brick (breakable)
    '?' ? block (star)    'T' ? block (taco)  'U' ? block (1-UP)
+   'A' ? block (power berry — grow big!)     'H' ? block (fire flower)
+   'I' ? block (ice flower)                  '8' RAINBOW BOX (+10 stars!)
    '*' invisible 1-UP block                  'B' used block
    'o' star (coin)       '^' spikes          'S' spring
    '(' ')' pipe top      '[' ']' pipe body   'D' 'd' SECRET pipe top
@@ -732,7 +783,7 @@ const LEVELS = [
 '                                                                                              o o                                  ',
 '                                                                                 ooooo       o   o                                 ',
 '                                                                                             o   o                                 ',
-'          ?o?                 =?=T                                  =  *      ==o=o=o==     o     o                                 ',
+'          ?o?                 A?=T                                  =  *      ==o=8=o==     o     o                                 ',
 '                                            ,                                                                                      ',
 '   p              ()       E        ,  xx  E    ,      Dd   ooo        ,    ,             ,        ,      E   E  ,                 ',
 '        ,    ,    []      xxx      xxxxxxx           E [] E       E         ,  E         S  xx          ,       xx   ,    F        ',
@@ -772,9 +823,9 @@ const LEVELS = [
 '                                                                                                                      ',
 '                                 ooooooo                                                                              ',
 '                                #########                                                                             ',
-'                    ?T?                                =====   o o o                                                  ',
+'                    ?T?                                ==H==   o o o                                                  ',
 '                                                                                   o o o                              ',
-'         ooo                ,         V    ,        ==     ==              =     V        ,   o o o     ,             ',
+'         ooo                ,         V    ,        A=     ==              =     V        ,   o o o     ,             ',
 '    p           ^^^       E S        ,   E   E  ,        ,       ^^=^^    ,  E       E       ,     ,  E       F       ',
 '#####################################################################################################################;'.replace(/;/g,'#'),
 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
@@ -798,7 +849,7 @@ const LEVELS = [
 '                                      V                                                                                       ',
 '                                                                          V          ooo                                      ',
 '                                                  ####            ooo    ####       ####                                      ',
-'                ####       ?o?T                                                                                               ',
+'                ####       AoHT                                                                                               ',
 '                                                                                             o                                ',
 '           ####       ####        ES         ####,    ######    E  E ####      ####      =   = o =   ,                        ',
 '    p           ,            E   ,        ,                ,                              ,      ,  E     ,   F               ',
@@ -824,7 +875,7 @@ const LEVELS = [
 '        #####          o                                                                      o   o                           ',
 '                                             oo                                                                               ',
 '                                            ####                                            o       o                         ',
-'                      ?o?                                 T           =?=                              V                      ',
+'                      Ao?                                 T           I?=                              V                      ',
 '                                    V   ==                                                                                    ',
 '                          ooo                                     oo              Dd                        o                 ',
 '   p  S ,           E         ,        E       ,                   ,  E     E     []            S    E    ,    E    ,   F     ',
@@ -864,7 +915,7 @@ const LEVELS = [
 '             o                                                        =======                                                     ',
 '                                             V                                                                                    ',
 '                                          oo                                                                                      ',
-'            ?o?             =T=          ####             U                         *                           o   ??            ',
+'            Ao?             HT=          ####             U                         *                           o   ?8            ',
 '                                    oo          oo                                                 ==       o                     ',
 '      oo                           ####        ####                             o                       o                         ',
 '   p     E      , ^^^     E     ,                        ,    E     E  ,     S        ,        ,  ^^^^    E     E       ,   F     ',
@@ -890,7 +941,7 @@ const LEVELS = [
 '                       ooo                                      oo                     oo                               ',
 '                                         =S                     =S                                                      ',
 '                       ===                                                             == V                             ',
-'        ?o?              T                    ?o?                       U                       ?o?                     ',
+'        ?A?              T                    ?o?                       U                       ?8?                     ',
 '      o        o                 o                    o                                                  o  o           ',
 '                              o                    o    Dd             o                                                ',
 '   p , , E    ,  ,        S E      S              E          S            E       S               E             F       ',
@@ -930,7 +981,7 @@ const LEVELS = [
 '                                                                                              oooo                    ',
 '                                                                                              ####                    ',
 '                                                                                          V                           ',
-'                                              ?T? oooo                                                                ',
+'                                              AT? oooo                                                                ',
 '                     ooo                          ####       oo                      oo                               ',
 '                                 o  o   o                           Dd                                                ',
 '   p   ,          R        R     ,E   E   E            ,            []    R ,  E            S       ,   E  E  F       ',
@@ -970,7 +1021,7 @@ const LEVELS = [
 '                                                                          oo                     ooo                    ',
 '                                                                         ####                    ####                   ',
 '                                                                  V                                                     ',
-'                                ?o?             oooo                              T                     U               ',
+'                                Io?             oooo                              T                     U               ',
 '               ooo        oo         ooo   ooo  ####    oo            ####               oo                             ',
 '                                                                                                                        ',
 '   p   ,        K     E             , K     K                 E       ,               K        S       ,  E   K F       ',
@@ -996,7 +1047,7 @@ const LEVELS = [
 '                                                                                              oooo                          ',
 '                                                                        V                     ####                          ',
 '                                                                                                                            ',
-'                       ooo          =T=            ooo                    oooo        ?o?                                   ',
+'                       ooo          HTH            ooo                    oooo        ?8?                                   ',
 '             ooo                           ooo                            ####   oo                                         ',
 '                                                                                                                            ',
 '   p    ,      J    ^^        J         ,  ^^^  K         J     J   ^^                    , S       J   ^^  E   K   F       ',
@@ -1022,7 +1073,7 @@ const LEVELS = [
 '                                           oooo                                                                               ',
 '                                           ####                                                                               ',
 '                                                                                                                W             ',
-'                      ===                         U               ?T?                                           W             ',
+'                      AHI                         U               ?T?                                           W             ',
 '                     o   o                                                   ooo            ooo                 W             ',
 '          ooo                                                                 =                                 W oo          ',
 '   p    ,     E   ^^      K   , J   ^^^ S             E   K , J       ^^  E   =     ,             G             W    M  F     ',
@@ -1048,7 +1099,7 @@ const LEVELS = [
 '                                          oooo                                    oooo                                  ',
 '                                          ####                V                   ####                     V            ',
 '                                                                                                                        ',
-'                        ?T?                         U               ?o?                             T                   ',
+'                        ?T?                         U               ?8?                             T                   ',
 '               ooo                 ooo                 ooo                 ooo                 ooo                      ',
 '                                                                                                                        ',
 '   p   ,            R       E  ,        S       J  ,            E      ,        S       J  ,            R    ,  F       ',
@@ -1093,7 +1144,7 @@ const G = {
   grid:null, gridW:0, gridH:0,         // active map
   mainGrid:null, bonusGrid:null,
   inBonus:false,
-  enemies:[], particles:[], texts:[], pickups:[],
+  enemies:[], particles:[], texts:[], pickups:[], shots:[],
   camX:0, camY:0, camShake:0,
   score:0, stars:0, totalStars:0, lives:5, hearts:3,
   flagX:0, flagY:0,
@@ -1110,7 +1161,7 @@ const G = {
   time:0,
 };
 const player = {
-  x:0, y:0, w:20, h:30, vx:0, vy:0,
+  x:0, y:0, w:20, h:30, vx:0, vy:0, power:'small',
   onGround:false, facing:1, anim:0, jumping:false,
   coyote:0, jumpBuf:0, landT:0,
   inv:0,            // invincibility after hurt
@@ -1210,7 +1261,7 @@ function loadLevel(idx, keepScore=true){
   G.bonusGrid = L.bonus ? parseMap(L.bonus).grid : null;
   G.inBonus = false;
   G.grid = G.mainGrid; G.gridW = m.w; G.gridH = m.h;
-  G.enemies = []; G.particles = []; G.texts = []; G.pickups = []; G.mum = null;
+  G.enemies = []; G.particles = []; G.texts = []; G.pickups = []; G.shots = []; G.mum = null;
   G.stars = 0; G.totalStars = 0; G.hearts = 3;
   G.camX = 0; G.camY = 0;
   player.vx = 0; player.vy = 0; player.inv = 0; player.tacoTimer = 0;
@@ -1230,6 +1281,7 @@ function loadLevel(idx, keepScore=true){
       else if (ch === 'G'){ G.enemies.push(makeKing(c*TILE-6, (r+1)*TILE)); grid[r][c]=' '; }
       else if (ch === 'M'){ G.mum = { x:c*TILE+4, y:(r+1)*TILE - 32, saved:false, animT:0 }; grid[r][c]=' '; }
       else if (ch === 'o' || ch === '?'){ G.totalStars++; }   // '?' blocks pop a star too
+      else if (ch === '8'){ G.totalStars += 10; }             // rainbow box pays out 10
       else if (ch === 'F'){ G.flagX = c; G.flagY = r; }
     }
   };
@@ -1242,6 +1294,7 @@ function loadLevel(idx, keepScore=true){
   G.state = 'STARTCARD'; G.stateTimer = 1.6;
 }
 function startRun(idx){
+  setPower('small');
   G.score = 0; G.lives = 5; G.foundSecret = false;
   G.stats = { bonks:0, stars:0, deaths:0, tacos:0, secrets:0, toots:0, kings:0, mums:0 };
   loadLevel(idx);
@@ -1267,7 +1320,7 @@ function makeKing(x, footY){
 }
 
 /* ================= TILE HELPERS ================= */
-const SOLID = new Set(['#','x','=','?','T','U','B','(',')','[',']','D','d','S','W']);
+const SOLID = new Set(['#','x','=','?','T','U','B','(',')','[',']','D','d','S','W','A','H','I','8']);
 function tileAt(c, r){
   if (c < 0 || c >= G.gridW) return 'x';     // walls at level edges
   if (r < 0) return ' ';
@@ -1327,6 +1380,10 @@ function headBump(b){
   if (ch === '?'){ setTile(c,r,'B'); popStar(px, py); }
   else if (ch === 'T'){ setTile(c,r,'B'); spawnTaco(px, py); SFX.pop(); }
   else if (ch === 'U'){ setTile(c,r,'B'); give1Up(px, py); }
+  else if (ch === 'A'){ setTile(c,r,'B'); spawnPower(px, py, 'berry'); SFX.pop(); }
+  else if (ch === 'H'){ setTile(c,r,'B'); spawnPower(px, py, 'fire'); SFX.pop(); }
+  else if (ch === 'I'){ setTile(c,r,'B'); spawnPower(px, py, 'ice'); SFX.pop(); }
+  else if (ch === '8'){ setTile(c,r,'B'); rainbowBurst(px, py); }
   else if (ch === '*'){ setTile(c,r,'B'); give1Up(px, py); announce('Secret block! HOW did you know?!'); G.stats.secrets++; }
   else if (ch === '='){
     setTile(c,r,' '); SFX.brick(); addScore(50, px+8, py);
@@ -1342,6 +1399,21 @@ function popStar(px, py){
 }
 function spawnTaco(px, py){
   G.pickups.push({ kind:'taco', x:px+2, y:py - 22, vy:-120, t:0 });
+}
+function spawnPower(px, py, kind){
+  G.pickups.push({ kind, x:px+4, y:py - 24, vy:-120, t:0 });
+}
+function rainbowBurst(px, py){
+  SFX.oneup();
+  announce('🌈 RAINBOW BOX! +10 STARS! 🌈', 3);
+  addScore(1000, px+8, py-10);
+  for (let i=0;i<10;i++){
+    G.stars++; G.stats.stars++; checkStarMilestone();
+    const ang = Math.PI + (i/9)*Math.PI;   // star fountain fans out over the box
+    G.particles.push({ x:px+16, y:py, vx:Math.cos(ang)*(120+i*14), vy:-260-Math.random()*160,
+      life:1.2, t:0, grav:500, color:'hsl(' + i*36 + ',90%,60%)', size:5, flutter:0, star:true });
+  }
+  confetti(px+16 - G.camX, py - G.camY, 40);
 }
 function give1Up(px, py){
   SFX.oneup(); G.lives++; addText(px+4, py-10, '1-UP!', '#7bff7b', 16, 1.5);
@@ -1401,6 +1473,12 @@ function updatePlayer(dt){
   const fallV = p.vy;
   const bumps = moveAndCollide(p, dt, true);
   for (const b of bumps) headBump(b);
+  // grew under a low ceiling? pop back to small instead of wedging forever
+  if (p.power !== 'small'){
+    const hr = Math.floor(p.y / TILE);
+    for (let c = Math.floor(p.x/TILE); c <= Math.floor((p.x + p.w - 0.01)/TILE); c++)
+      if (isSolid(tileAt(c, hr))){ setPower('small'); puff(p.x + p.w/2, p.y + p.h/2, '#fff', 6, 60); break; }
+  }
   if (p.onGround && !wasOnGround){
     p.stompChain = 0;
     if (fallV > 430){ p.landT = 0.13; puff(p.x + p.w/2, p.y + p.h, 'rgba(220,220,220,0.7)', 4, 50); }
@@ -1412,6 +1490,13 @@ function updatePlayer(dt){
     p.vy = SPRING_V; p.jumping = false; p.onGround = false; SFX.spring();
     if (Math.random() < 0.4) say(SPRING_QUIPS[Math.floor(Math.random()*SPRING_QUIPS.length)], 1.2);
     puff(p.x + p.w/2, p.y + p.h, '#ff5252', 6, 60);
+  }
+
+  // fireballs / iceballs (two in the air max, like a certain plumber)
+  if (justDown.fire && (p.power === 'fire' || p.power === 'ice') && G.shots.length < 2){
+    G.shots.push({ x: p.x + (p.facing > 0 ? p.w : -10), y: p.y + 10, w: 10, h: 10,
+      vx: p.facing * 400, vy: 80, kind: p.power, t: 0 });
+    SFX.shoot();
   }
 
   // ducking + toot easter egg
@@ -1513,6 +1598,25 @@ function updatePlayer(dt){
         p.tacoTimer = 8; G.stats.tacos++;
         SFX.taco(); announce('TACO TIME! ZOOM ZOOM!');
         addScore(500, it.x, it.y);
+      } else if (it.kind === 'berry'){
+        addScore(500, it.x, it.y);
+        if (p.power === 'small'){
+          setPower('big'); SFX.oneup();
+          announce('SUPER ORION! Berries make you BIG!');
+          confetti(p.x + p.w/2 - G.camX, p.y - G.camY, 30);
+        } else SFX.coin();
+      } else if (it.kind === 'fire'){
+        addScore(500, it.x, it.y);
+        if (p.power !== 'fire'){
+          setPower('fire'); SFX.taco();
+          announce('FIRE ORION! Press X (or B) to shoot!', 3);
+        } else SFX.coin();
+      } else if (it.kind === 'ice'){
+        addScore(500, it.x, it.y);
+        if (p.power !== 'ice'){
+          setPower('ice'); SFX.freeze();
+          announce('ICE ORION! Press X (or B) to freeze!', 3);
+        } else SFX.coin();
       }
     }
   }
@@ -1542,9 +1646,27 @@ function rectsOverlap(ax,ay,aw,ah, bx,by,bw,bh){
   return ax < bx+bw && ax+aw > bx && ay < by+bh && ay+ah > by;
 }
 
+function setPower(pw){
+  const was = player.power !== 'small', is = pw !== 'small';
+  player.power = pw;
+  if (is && !was){ player.y -= 12; player.h = 42; }
+  else if (!is && was){ player.h = 30; player.y += 12; }
+}
 function hurtPlayer(fromX){
   const p = player;
   if (p.inv > 0) return;
+  if (p.power !== 'small'){
+    // Mario rules: powered-up hits cost the power, not a heart
+    setPower(p.power === 'big' ? 'small' : 'big');
+    SFX.hurt();
+    say('My power!', 1.2);
+    p.inv = 1.6;
+    p.vy = -340; p.jumping = false;
+    p.vx = (p.x + p.w/2 < fromX ? -1 : 1) * 240;
+    G.camShake = 0.25;
+    puff(p.x + p.w/2, p.y + p.h/2, '#ffffff', 8, 90);
+    return;
+  }
   G.hearts--;
   SFX.hurt();
   say(HURT_QUIPS[Math.floor(Math.random()*HURT_QUIPS.length)], 1.2);
@@ -1559,6 +1681,7 @@ function pitDeath(){
   die(true);
 }
 function die(isPit){
+  setPower('small');
   G.stats.deaths++;
   G.lives--;
   SFX.die();
@@ -1621,6 +1744,22 @@ function updateEnemies(dt){
     if (e.squash > 0){
       e.squash -= dt;
       if (e.squash <= 0) G.enemies.splice(i,1);
+      continue;
+    }
+    if (e.frozenT > 0){
+      e.frozenT -= dt;
+      e.vy = (e.vy || 0) + GRAV * dt; if (e.vy > 600) e.vy = 600;
+      e.vx = 0;
+      moveAndCollide(e, dt, false);
+      // an iced enemy is a harmless cube — stomping shatters it (even a prickleburr!)
+      if (rectsOverlap(p.x, p.y, p.w, p.h, e.x, e.y, e.w, e.h)){
+        if (p.vy > 0 && (p.y + p.h - e.y) < 16){
+          e.frozenT = 0; e.squash = 0.5; G.stats.bonks++;
+          p.vy = keys.jump ? -480 : -330; p.jumping = false;
+          addScore(300, e.x, e.y - 10);
+          SFX.shatter(); puff(e.x + e.w/2, e.y + e.h/2, '#bfeaff', 10, 100);
+        }
+      }
       continue;
     }
     e.animT += dt;
@@ -1765,6 +1904,34 @@ function updateEnemies(dt){
     }
   }
 }
+/* ================= FIRE & ICE SHOTS ================= */
+function updateShots(dt){
+  for (let i=G.shots.length-1; i>=0; i--){
+    const s = G.shots[i];
+    s.t += dt;
+    s.vy += 1500*dt; if (s.vy > 700) s.vy = 700;
+    moveAndCollide(s, dt, false);
+    if (s.onGround){ s.vy = -330; s.onGround = false; }   // bounces along like a proper fireball
+    if (Math.random() < dt*40) sparkle(s.x + s.w/2, s.y + s.h/2, s.kind === 'fire' ? '#ff9d4d' : '#bfeaff');
+    let gone = s.blockedX || s.t > 2.5 || Math.abs(s.x - player.x) > W*0.7 || s.y > G.gridH*TILE + 60;
+    if (!gone) for (const e of G.enemies){
+      if (e.squash > 0) continue;
+      if (!rectsOverlap(s.x, s.y, s.w, s.h, e.x, e.y, e.w, e.h)) continue;
+      if (e.kind === 'king'){
+        if (!e.shrugged){ e.shrugged = true; announce('KING DAD: "Dad reflexes! Bonk me instead!"', 2.5); }
+        SFX.bump();
+      } else if (s.kind === 'fire'){
+        e.frozenT = 0; e.squash = 0.5; G.stats.bonks++;
+        addScore(200, e.x, e.y - 10);
+        SFX.stomp(); puff(e.x + e.w/2, e.y + e.h/2, '#ff9d4d', 8, 90);
+      } else if (!(e.frozenT > 0)){   // frozenT starts undefined — don't trust <= 0
+        e.frozenT = 4; SFX.freeze(); puff(e.x + e.w/2, e.y + e.h/2, '#bfeaff', 6, 60);
+      }
+      gone = true; break;
+    }
+    if (gone){ puff(s.x + s.w/2, s.y + s.h/2, s.kind === 'fire' ? '#ff9d4d' : '#bfeaff', 4, 50); G.shots.splice(i,1); }
+  }
+}
 function kingDefeated(e){
   e.squash = 1.6;
   G.stats.kings++;
@@ -1850,6 +2017,7 @@ function update(dt){
       updatePlayer(dt);
       if (G.state !== 'PLAY') break;  // state may have changed (clear/death/pipe)
       updateEnemies(dt);
+      updateShots(dt);
       updateParticles(dt);
       updateCamera(dt);
       if (G.msgTimer > 0) G.msgTimer -= dt;
@@ -1960,6 +2128,7 @@ function draw(){
   drawPickups();
   drawMum();
   drawEnemies();
+  drawShots();
   if (G.state !== 'GAMEOVER'){
     if (G.state === 'PIPE' && G.pipeAnim && G.pipeAnim.dir === 'down'){
       // clip so Orion sinks INTO the pipe instead of sliding down its face
@@ -2100,7 +2269,17 @@ function drawTiles(pal, camX, camY){
           ctx.moveTo(x+24, y+16); ctx.lineTo(x+24, y+TILE);
           ctx.stroke();
           break;
-        case '?': case 'T': case 'U': {
+        case '8': {
+          const bounce = Math.sin(G.time*4 + c)*1.5;
+          ctx.fillStyle = 'hsl(' + Math.floor(G.time*90 + c*30)%360 + ',80%,55%)';
+          ctx.fillRect(x+1, y+1, TILE-2, TILE-2);
+          ctx.fillStyle = 'rgba(255,255,255,0.9)';
+          ctx.font = 'bold 20px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.fillText('?', x+TILE/2, y+TILE/2 + bounce);
+          if (Math.random() < 0.03) sparkle(x + Math.random()*TILE, y - 2, 'hsl(' + Math.floor(Math.random()*360) + ',90%,65%)');
+          break;
+        }
+        case '?': case 'T': case 'U': case 'A': case 'H': case 'I': {
           const bounce = Math.sin(G.time*4 + c)*1.5;
           ctx.fillStyle = '#f5a623'; ctx.fillRect(x+1, y+1+bounce*0, TILE-2, TILE-2);
           ctx.fillStyle = '#ffd23e'; ctx.fillRect(x+3, y+3, TILE-6, TILE-6);
@@ -2231,7 +2410,20 @@ function drawDeco(x, y, pal, c){
 }
 function drawPickups(){
   for (const it of G.pickups){
-    ctx.drawImage(sprites.taco, it.x - 2, it.y + Math.sin(it.t*4)*2 - 2);
+    const img = it.kind === 'berry' ? sprites.berry : it.kind === 'fire' ? sprites.fireflower
+              : it.kind === 'ice' ? sprites.iceflower : sprites.taco;
+    ctx.drawImage(img, it.x - 2, it.y + Math.sin(it.t*4)*2 - 2);
+  }
+}
+function drawShots(){
+  for (const s of G.shots){
+    const cx = s.x + s.w/2, cy = s.y + s.h/2;
+    if (s.kind === 'fire'){
+      ctx.fillStyle = '#ff6d00'; ctx.beginPath(); ctx.arc(cx, cy, 6, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#ffd23e'; ctx.beginPath(); ctx.arc(cx, cy, 3.5, 0, Math.PI*2); ctx.fill();
+    } else {
+      drawStarShape(cx, cy, 7, '#bfeaff', '#7fd4e8');
+    }
   }
 }
 function drawEnemies(){
@@ -2259,6 +2451,12 @@ function drawEnemies(){
     if (e.dir > 0) ctx.scale(-1, 1);
     if (e.squash > 0) ctx.scale(1, 0.5);
     ctx.drawImage(img, -img.width/2, -img.height);
+    if (e.frozenT > 0 && (e.frozenT > 1 || Math.floor(G.time*8)%2)){  // blinks before thawing
+      ctx.fillStyle = 'rgba(150,220,255,0.5)';
+      ctx.fillRect(-img.width/2 - 2, -img.height - 2, img.width + 4, img.height + 4);
+      ctx.strokeStyle = 'rgba(255,255,255,0.8)'; ctx.lineWidth = 2;
+      ctx.strokeRect(-img.width/2 - 2, -img.height - 2, img.width + 4, img.height + 4);
+    }
     ctx.restore();
     if (e.kind === 'king' && e.squash <= 0){
       for (let i=0;i<3;i++)
@@ -2290,7 +2488,9 @@ function drawPlayer(){
   else if (p.ducking) frameKey = 'duck';
   else if (!p.onGround) frameKey = 'jump';
   else if (Math.abs(p.vx) > 20) frameKey = Math.floor(p.anim)%2 ? 'run1' : 'run2';
-  const set = (G.bigHead && frameKey !== 'duck') ? sprites.orionBig : sprites.orion; // duck art shifts the head down; big-head split would mangle it
+  const sets = p.power === 'fire' ? sprites.orionFire : p.power === 'ice' ? sprites.orionIce
+             : { norm:sprites.orion, big:sprites.orionBig };
+  const set = (G.bigHead && frameKey !== 'duck') ? sets.big : sets.norm; // duck art shifts the head down; big-head split would mangle it
   const img = set[frameKey];
   ctx.save();
   const cx = p.x + p.w/2;
@@ -2299,6 +2499,7 @@ function drawPlayer(){
   if (G.state === 'DYING') ctx.scale(1,-1);
   if (p.landT > 0) ctx.scale(1 + p.landT*1.6, 1 - p.landT*1.8);          // landing squash
   else if (!p.onGround && p.vy < -300) ctx.scale(0.92, 1.08);            // jump stretch
+  if (p.power !== 'small') ctx.scale(1.35, 1.35);                        // SUPER Orion
   ctx.drawImage(img, -img.width/2, -img.height + 2);
   ctx.restore();
 }
@@ -2466,7 +2667,7 @@ function drawTitle(){
     bigText('Beaten ' + save.beaten.slice(0, SECRET_IDX).filter(Boolean).length + '/' + SECRET_IDX +
             (save.bestScore ? '    Best score ' + save.bestScore : ''), 352, 14, '#ffd23e');
   }
-  bigText('← → / A D move    SPACE / ↑ jump    ↓ duck', 380, 15, '#e8d9ff');
+  bigText('← → / A D move    SPACE / ↑ jump    ↓ duck    X shoot', 380, 15, '#e8d9ff');
   bigText('P pause    M music    R restart    F fullscreen', 408, 15, '#e8d9ff');
   bigText('Psst… try standing still for a while. Or typing things…', 450, 13, '#c9b6ee');
 }
@@ -2605,7 +2806,7 @@ function drawWin(){
 }
 
 /* ================= GO! ================= */
-window.__SO = { G, player, loadLevel, LEVELS, keys };  // debug/test hook
+window.__SO = { G, player, loadLevel, LEVELS, keys, setPower };  // debug/test hook
 requestAnimationFrame(frame);
 </script>
 </body>

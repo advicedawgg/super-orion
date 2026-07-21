@@ -11,6 +11,7 @@ A silly, charming 2D platformer made for Orion. No installs, no internet needed.
 | ← → or A / D | Move |
 | SPACE or ↑ / W | Jump (hold for higher jumps!) |
 | ↓ or S | Duck |
+| X | Shoot fireballs / iceballs (with a flower power!) |
 | P | Pause (with very helpful "tips") |
 | M | Music on/off |
 | R | Restart level |
@@ -28,6 +29,12 @@ Or just play it anywhere: **https://orion.advicedawg.com**
   - *World 1:* Grassy Greens → Cookie Caves → Sky Snack Summit → Soda Springs → Star Fortress → Cotton Candy Clouds
   - *World 2:* Bubbly Beach → Ice Cream Peaks (slippery!) → Taco Volcano → **King Dad's Castle**
 - Collect **gold stars** (Orion = constellation, get it?), bounce on springs, break bricks, bump `?` blocks, and touch the star flag to win.
+- **Power-ups!** (requested by Orion himself) Hidden in `?` blocks through every level:
+  - 🍎 **Power Berry** — Orion grows BIG. Getting hurt while powered up costs the power, not a heart.
+  - 🔥 **Fire Flower** — press **X** (or the B button on touch/gamepad) to throw bouncing fireballs. They bonk *anything* — even prickleburrs!
+  - ❄️ **Ice Flower** — iceballs freeze enemies into harmless ice cubes. Stomp the cube to shatter it (yes, even a prickleburr).
+  - 🌈 **Rainbow Mystery Box** — a shimmering rainbow block. Bump it for an instant **+10 star** party! (You'll need it for Star Champion.)
+  - Powers carry from level to level; losing a life sends you back to small.
 - **The creatures:**
   - 🟢 **Grumblins** & 💜 **Flapjacks** — classic bonk-on-the-head customers
   - 🌰 **Prickleburrs** — SPIKY. Do *not* jump on them. Jump *over* them (or bowl them over…)

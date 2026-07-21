@@ -47,6 +47,8 @@ If the checker prints `[FAIL]` lines, fix the placements in `levelgen-work.js`, 
 ```
 '#' ground top   'x' dirt/stone     '=' breakable brick   'B' used block
 '?' block→star   'T' block→taco     'U' block→1-UP        '*' invisible 1-UP block
+'A' block→power berry (grow big)    'H' block→fire flower  'I' block→ice flower
+'8' RAINBOW BOX (pays +10 stars on bump; counts 10 toward the level star total — a level's Star Champion needs it bumped)
 'o' star         '^' spikes (hurt)  'S' spring (solid, bouncy)
 '()' pipe top    '[]' pipe body     'Dd' SECRET pipe top: TWO tiles SIDE-BY-SIDE on the SAME row, D left + d right, NEVER stacked vertically (press ↓ = bonus room)
 'E' grumblin     'V' flapjack       'F' flag (goal)       'p' spawn   ',' decoration

@@ -29,8 +29,8 @@ console.log(`physics: JUMP_V=${JUMP_V} (rise ${(JUMP_V * JUMP_V / (2 * GRAV) / 3
 
 // NOTE: 'W' (castle gate) is solid in-game but NOT here — reachability is
 // checked as if King Dad 'G' is already defeated and the gate has crumbled.
-const SOLID = new Set(['#', 'x', '=', '?', 'T', 'U', 'B', '(', ')', '[', ']', 'D', 'd', 'S']);
-const LEGEND = new Set('#x=?TU*Bo^S()[]DdEVFKRJGWMp, '.split(''));
+const SOLID = new Set(['#', 'x', '=', '?', 'T', 'U', 'B', '(', ')', '[', ']', 'D', 'd', 'S', 'A', 'H', 'I', '8']);
+const LEGEND = new Set('#x=?TU*Bo^S()[]DdEVFKRJGWMpAHI8, '.split(''));
 const GROUND_ENEMIES = new Set(['E', 'K', 'R', 'J', 'G', 'M']); // need a floor below (M = Mum, not an enemy, same rule)
 const key = (c, r) => c + ',' + r;
 
@@ -106,7 +106,7 @@ function analyze(name, rows, spawnPos) {
     const ch = grid[r][c];
     if (ch === 'p') { spawn = { c, r: r + 1 }; grid[r][c] = ' '; }
     else if (ch === 'o') stars.push(key(c, r));
-    else if ('?TU*'.includes(ch)) blocks.push(key(c, r));
+    else if ('?TU*AHI8'.includes(ch)) blocks.push(key(c, r));
     else if (ch === 'F') flagX = c;
     else if (ch === 'D') secretPipes.push(key(c, r));
   }
@@ -153,7 +153,7 @@ function analyze(name, rows, spawnPos) {
       p.vy += GRAV * DT; if (p.vy > 900) p.vy = 900;
       p.vx = (p.vy < 0 ? dirA : dirB) * MAX_SPD;
       const res = collideMove(p);
-      for (const b of res.bumped) if ('?TU*'.includes(b.ch)) out.bumps.add(key(b.c, b.r));
+      for (const b of res.bumped) if ('?TU*AHI8'.includes(b.ch)) out.bumps.add(key(b.c, b.r));
       const c0 = Math.floor(p.x / TILE), c1 = Math.floor((p.x + p.w) / TILE);
       const r0 = Math.floor(p.y / TILE), r1 = Math.floor((p.y + p.h) / TILE);
       for (let rr = r0; rr <= r1; rr++) for (let cc = c0; cc <= c1; cc++)
