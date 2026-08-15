@@ -1,4 +1,5 @@
-# Only index.html is the game — keep dev tooling off the website
+# index.html is the launcher menu, 1.html is the game, art/ feeds the menu.
+# Everything else here is dev tooling and stays off the website.
 .git
 .gitignore
 .assetsignore

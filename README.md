@@ -4,7 +4,11 @@
 A silly, charming 2D platformer made for Orion. No installs, no internet needed.
 
 ## How to play
-**Just double-click `index.html`** — it opens in your browser and runs instantly.
+**Just double-click `1.html`** — it opens in your browser and runs instantly.
+
+`index.html` is the launcher menu that fronts both games; it links to `1.html` and to the
+3D sequel at [orion2.advicedawg.com](https://orion2.advicedawg.com)
+([D:\dev\super-orion-2](../super-orion-2)).
 
 | Key | Action |
 |---|---|

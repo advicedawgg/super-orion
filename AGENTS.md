@@ -1,6 +1,6 @@
 # Super Orion — agent rules
 
-This is a kid's 2D platformer. **Everything lives in one file: `index.html`** (engine, sprites, audio, and the `const LEVELS = [...]` array of ASCII tile maps). There is no build step; opening `index.html` in a browser runs the game.
+This is a kid's 2D platformer. **Everything lives in one file: `1.html`** (engine, sprites, audio, and the `const LEVELS = [...]` array of ASCII tile maps). There is no build step; opening `1.html` in a browser runs the game.
 
 ## Hard rules
 
@@ -9,7 +9,7 @@ This is a kid's 2D platformer. **Everything lives in one file: `index.html`** (e
 3. **Never edit or delete existing levels** unless explicitly asked.
 3b. **The LAST entry in `LEVELS` is the secret Star Road (`secret:true`). Insert new story levels BEFORE it, never after it.** The level just before the secret one is the story finale (beats to the WIN screen); `secret:true` levels also end at WIN and unlock via 10/10 Star Champion badges, not progression.
 4. **Never hand-type map rows.** You WILL miscount spaces. Always generate rows with the `put(row, col, str)` script method (see workflow below).
-5. A level change is **not done** until `node levelcheck.js index.html` prints `RESULT: PASS`. Paste that output in your final answer as proof.
+5. A level change is **not done** until `node levelcheck.js 1.html` prints `RESULT: PASS`. Paste that output in your final answer as proof.
 
 ## Required workflow for adding a level
 
@@ -17,8 +17,8 @@ This is a kid's 2D platformer. **Everything lives in one file: `index.html`** (e
 copy levelgen.template.js levelgen-work.js
 (edit CONFIG + PLACEMENTS in levelgen-work.js)
 node levelgen-work.js                 → prints a ruler preview + a paste-ready level object
-(paste the object into LEVELS in index.html, just above the final `];`)
-node levelcheck.js index.html         → must end with: RESULT: PASS
+(paste the object into LEVELS in 1.html, just above the final `];`)
+node levelcheck.js 1.html         → must end with: RESULT: PASS
 (update the level list line in README.md)
 del levelgen-work.js
 ```
@@ -27,9 +27,9 @@ If the checker prints `[FAIL]` lines, fix the placements in `levelgen-work.js`, 
 
 ## When levelcheck FAILs — debugging rules (read before touching anything)
 
-1. **The checker reads `index.html`, NOT `levelgen-work.js`.** After ANY edit to `levelgen-work.js` you MUST re-run it and re-paste the fresh object over the old one in `index.html` before re-running the checker. If the checker reports tiles you believe you already moved, the two files are out of sync — re-paste first, do not investigate.
+1. **The checker reads `1.html`, NOT `levelgen-work.js`.** After ANY edit to `levelgen-work.js` you MUST re-run it and re-paste the fresh object over the old one in `1.html` before re-running the checker. If the checker reports tiles you believe you already moved, the two files are out of sync — re-paste first, do not investigate.
 2. **Never reconstruct the grid in your head.** Do not reason from memory about which column holds which tile — run `node levelgen-work.js` and read coordinates off the ruler preview, or run this one-liner against the real file:
-   `node -e "const L=eval(require('fs').readFileSync('index.html','utf8').match(/const LEVELS = (\[[\s\S]*?\n\]);/)[1]);L[IDX].main.forEach((row,r)=>{let s='';for(let c=0;c<row.length;c++)if(row[c]!==' ')s+=c+':'+row[c]+' ';if(s)console.log(r,s)})"`
+   `node -e "const L=eval(require('fs').readFileSync('1.html','utf8').match(/const LEVELS = (\[[\s\S]*?\n\]);/)[1]);L[IDX].main.forEach((row,r)=>{let s='';for(let c=0;c<row.length;c++)if(row[c]!==' ')s+=c+':'+row[c]+' ';if(s)console.log(r,s)})"`
 3. **One FAIL line = one small placement fix, then immediately re-check.** Keep deliberation to a few sentences; if the same FAIL survives 3 fix attempts, stop and report what you tried instead of re-deriving the level.
 4. **Common root causes, check these first:** (a) a floating platform more than 4 rows above the nearest floor is unreachable unless a spring sits on the floor within ~2 cols of the platform's edge (spring bounce reaches 6 rows and drifts 2-3 cols); stars above an unreachable platform are unreachable too. (b) a `D` you cannot STAND ON (solid tile directly above it, or no route up) fails the secret-pipe check. (c) blocks under a platform's footprint cannot be stood on.
 

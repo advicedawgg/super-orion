@@ -1,6 +1,6 @@
 'use strict';
-/* Level verifier for Super Orion.  Usage:  node levelcheck.js index.html
-   Reads physics constants + LEVELS straight out of index.html, validates level
+/* Level verifier for Super Orion.  Usage:  node levelcheck.js 1.html
+   Reads physics constants + LEVELS straight out of 1.html, validates level
    structure, then BFS-simulates the player's actual jump/fall/spring kinematics
    from the spawn point to prove every star, block, secret pipe and the flag are
    reachable.  Ends with "RESULT: PASS" (exit 0) or "RESULT: FAIL" (exit 1).
@@ -12,7 +12,9 @@ const warn = msg => console.log('  [warn] ' + msg);
 
 let LEVELS, GRAV, MAX_SPD, JUMP_V, SPRING_V;
 try {
-  const html = fs.readFileSync(process.argv[2] || 'index.html', 'utf8');
+  // The game lives in 1.html — 1.html is now the launcher menu that fronts
+  // both Super Orion and the 3D sequel.
+  const html = fs.readFileSync(process.argv[2] || '1.html', 'utf8');
   const lv = html.match(/const LEVELS = (\[[\s\S]*?\n\]);/);
   if (!lv) throw new Error('LEVELS array not found in file');
   LEVELS = eval(lv[1]);
