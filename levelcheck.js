@@ -30,8 +30,10 @@ console.log(`physics: JUMP_V=${JUMP_V} (rise ${(JUMP_V * JUMP_V / (2 * GRAV) / 3
 // NOTE: 'W' (castle gate) is solid in-game but NOT here — reachability is
 // checked as if King Dad 'G' is already defeated and the gate has crumbled.
 const SOLID = new Set(['#', 'x', '=', '?', 'T', 'U', 'B', '(', ')', '[', ']', 'D', 'd', 'S', 'A', 'H', 'I', '8']);
-const LEGEND = new Set('#x=?TU*Bo^S()[]DdEVFKRJGWMpAHI8, '.split(''));
-const GROUND_ENEMIES = new Set(['E', 'K', 'R', 'J', 'G', 'M']); // need a floor below (M = Mum, not an enemy, same rule)
+// '~' / '_' moving platforms and 'C' checkpoints are entities/markers, NOT solid:
+// reachability must never depend on them, so they are legal but treated as air.
+const LEGEND = new Set('#x=?TU*Bo^S()[]DdEVFKRJGWMpAHI8,~_CZ '.split(''));
+const GROUND_ENEMIES = new Set(['E', 'K', 'R', 'J', 'G', 'M', 'Z']); // need a floor below (M = Mum, Z = Sootie — not enemies, same rule)
 const key = (c, r) => c + ',' + r;
 
 function parseMap(rows) {
@@ -74,7 +76,7 @@ function validate(L, i) {
   if (!hasD && L.bonus) bad(`${tag}: has a bonus room but no 'Dd' secret pipe in main to enter it`);
   if (L.bonus) {
     if (count(L.bonus, 'D') === 0) bad(`${tag}: bonus room has no 'Dd' exit pipe — player would be trapped`);
-    for (const ch of ['p', 'F', 'E', 'V', 'K', 'R', 'J', 'G', 'W', 'M'])
+    for (const ch of ['p', 'F', 'E', 'V', 'K', 'R', 'J', 'G', 'W', 'M', 'Z', 'C'])
       if (count(L.bonus, ch)) bad(`${tag}: bonus room must not contain '${ch}'`);
     if (!dropLands(L.bonus, L.bonusSpawn[0], L.bonusSpawn[1])) bad(`${tag}: bonusSpawn ${L.bonusSpawn} drops into nothing`);
     if (!dropLands(L.main, L.mainReturn[0], L.mainReturn[1])) bad(`${tag}: mainReturn ${L.mainReturn} drops into nothing`);

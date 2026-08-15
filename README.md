@@ -11,8 +11,8 @@ A silly, charming 2D platformer made for Orion. No installs, no internet needed.
 | ← → or A / D | Move |
 | SPACE or ↑ / W | Jump (hold for higher jumps!) |
 | ↓ or S | Duck |
-| X | Shoot fireballs / iceballs (with a flower power!) |
-| P | Pause (with very helpful "tips") |
+| X | Shoot fireballs / iceballs (with a flower power!) — **hold to RUN** |
+| P or ESC | Pause (with very helpful "tips") — press ↓ while paused to quit to the level map |
 | M | Music on/off |
 | R | Restart level |
 | F | Fullscreen |
@@ -20,7 +20,7 @@ A silly, charming 2D platformer made for Orion. No installs, no internet needed.
 
 On a tablet or phone, on-screen buttons appear automatically.
 
-With a controller (Steam Deck, Xbox, etc.): **d-pad / left stick** move, **A or B** jump (A also = start/continue), **Start** pause, **Select** music.
+With a controller (Steam Deck, Xbox, etc.): **d-pad / left stick** move, **A or B** jump (A also = start/continue), **X/Y** shoot (hold = run), **Start** pause (d-pad ↓ while paused = quit to map), **Select** music.
 
 Or just play it anywhere: **https://orion.advicedawg.com**
 
@@ -41,6 +41,11 @@ Or just play it anywhere: **https://orion.advicedawg.com**
   - 🐸 **Hoppits** — froggy hoppers that leap at you
   - 🐢 **Rolypolys** — stomp once → shell. Touch the shell → it rockets off and *bowls over every enemy in its path*. Ten-pin bonking!
 - **The story:** King Dad 👑 (bald, magnificent beard) has declared "no rescuing Mum before dinner!" Fight through his castle, bonk him **3 times**, and the gate crumbles — then run to **Mum** for the big rescue. 💕
+- **Moving platforms** ride back and forth in Grassy Greens, Star Fortress and Cotton Candy Clouds — hop on for stars and shortcuts.
+- **Taco power now makes you INVINCIBLE** — ram straight through enemies while it lasts (King Dad is unimpressed).
+- **Grab the flag higher up the pole** for a bigger bonus — top of the pole is worth +1000!
+- **🐱 Sootie**, Orion's toy cat (black, white belly), is lost somewhere in Ice Cream Peaks. Find him and he rides on Orion's head for the rest of the level.
+- King Dad's Castle has a **checkpoint flag** halfway — no more restarting the whole castle.
 - Weather! Bubbles float up at the beach, snow falls on the peaks, embers rise in the volcano.
 - **Progress saves automatically** (in the browser). Beating a level unlocks the next one on the **level select screen** — with ✓ badges for beaten levels and a ⭐ badge for collecting *every* star in a level (Star Champion!). Best score is remembered too.
 - Kid-friendly: 3 hearts per life, 5 lives, infinite continues, and the Game Over screen just suggests a snack break.

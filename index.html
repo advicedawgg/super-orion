@@ -59,7 +59,7 @@ const KEYMAP = {
   ArrowUp:'jump', KeyW:'jump', Space:'jump',
   ArrowDown:'down', KeyS:'down',
   KeyX:'fire',
-  Enter:'enter', KeyP:'pause', KeyM:'mute', KeyR:'restart', KeyF:'fullscr'
+  Enter:'enter', KeyP:'pause', Escape:'pause', KeyM:'mute', KeyR:'restart', KeyF:'fullscr'
 };
 function toggleFullscreen(){
   const el = document.getElementById('wrap');
@@ -228,6 +228,9 @@ const SFX = {
   shoot(){ tone(500, 0.09, 'square', 0.09, 900); },
   freeze(){ tone(midi(90), 0.12, 'sine', 0.1); tone(midi(94), 0.18, 'sine', 0.09, null, 0.08); },
   shatter(){ noiseBurst(0.12, 0.1); tone(midi(88), 0.1, 'triangle', 0.08, null, 0.02); },
+  // "me-ew": quick glide up, longer wail down, with a soft octave shadow underneath
+  meow(){ tone(520, 0.1, 'square', 0.09, 940); tone(940, 0.28, 'square', 0.09, 360, 0.09);
+          tone(470, 0.28, 'triangle', 0.05, 180, 0.09); },
 };
 
 /* ---- music sequencer (original bouncy tune) ---- */
@@ -699,6 +702,32 @@ const MUM_FRAMES = {
   '  WW    WW  '],
 };
 
+// SOOTIE — Orion's toy cat. Black, white belly, wagging tail. 10x10.
+const SOOTIE_FRAMES = {
+  sit1:[
+  ' k      k ',
+  ' kk    kk ',
+  ' kkkkkkkk ',
+  ' kYkkkkYk ',
+  ' kkkwwkkk ',
+  '  kkwwkk  ',
+  '  kwwwwk k',
+  '  kwwwwk k',
+  '  kkkkkkkk',
+  '  kk  kk  '],
+  sit2:[
+  ' k      k ',
+  ' kk    kk ',
+  ' kkkkkkkk ',
+  ' kYkkkkYk ',
+  ' kkkwwkkk ',
+  '  kkwwkk k',
+  '  kwwwwkk ',
+  '  kwwwwk  ',
+  '  kkkkkkk ',
+  '  kk  kk  '],
+};
+
 function renderFrame(rows, scale, bigHead=false){
   const w = rows[0].length, h = rows.length;
   const c = document.createElement('canvas');
@@ -733,6 +762,7 @@ for (const k in HOPPIT_FRAMES) sprites.hoppit[k] = renderFrame(HOPPIT_FRAMES[k],
 for (const k in ROLY_FRAMES) sprites.roly[k] = renderFrame(ROLY_FRAMES[k], SCALE);
 for (const k in KING_FRAMES) sprites.king[k] = renderFrame(KING_FRAMES[k], 3);
 sprites.mum = {}; for (const k in MUM_FRAMES) sprites.mum[k] = renderFrame(MUM_FRAMES[k], SCALE);
+sprites.sootie = {}; for (const k in SOOTIE_FRAMES) sprites.sootie[k] = renderFrame(SOOTIE_FRAMES[k], SCALE);
 sprites.taco = renderFrame(TACO_FRAME, 3);
 sprites.berry = renderFrame(BERRY_FRAME, 3);
 sprites.fireflower = renderFrame(FIREFLOWER_FRAME, 3);
@@ -763,6 +793,9 @@ sprites.orionIce  = makeOrionSet({ C:'#40c4de', O:'#eafcff', B:'#2a7fa8' });
    'R' rolypoly (stomp->shell->kick)         'G' KING DAD boss (3 bonks)
    'W' castle gate (crumbles when King Dad falls)
    'M' Mum — rescue her! (stands, waves)
+   '~' moving platform (horizontal, ±96px)  '_' moving platform (vertical, ±72px)
+   'C' checkpoint flag (respawn here after dying)
+   'Z' Sootie the toy cat — find him, he rides Orion's head (needs floor below)
    'p' player spawn      ',' decoration
 ============================================== */
 const LEVELS = [
@@ -783,8 +816,8 @@ const LEVELS = [
 '                                                                                              o o                                  ',
 '                                                                                 ooooo       o   o                                 ',
 '                                                                                             o   o                                 ',
-'          ?o?                 A?=T                                  =  *      ==o=8=o==     o     o                                 ',
-'                                            ,                                                                                      ',
+'          ?o?                 A?=T       o o o                      =  *      ==o=8=o==     o     o                                 ',
+'                                          ~ ,                                                                                      ',
 '   p              ()       E        ,  xx  E    ,      Dd   ooo        ,    ,             ,        ,      E   E  ,                 ',
 '        ,    ,    []      xxx      xxxxxxx           E [] E       E         ,  E         S  xx          ,       xx   ,    F        ',
 '########################  ###############  ########################   #################################  ###############;##########'.replace(/;/g,'#'),
@@ -917,7 +950,7 @@ const LEVELS = [
 '                                          oo                                                                                      ',
 '            Ao?             HT=          ####             U                         *                           o   ?8            ',
 '                                    oo          oo                                                 ==       o                     ',
-'      oo                           ####        ####                             o                       o                         ',
+'      oo                           ####   ~    ####                             o                       o                         ',
 '   p     E      , ^^^     E     ,                        ,    E     E  ,     S        ,        ,  ^^^^    E     E       ,   F     ',
 '##################################                    ####################################   #####################################',
 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx                    xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx   xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
@@ -942,7 +975,7 @@ const LEVELS = [
 '                                         =S                     =S                                                      ',
 '                       ===                                                             ==   V                           ',
 '        ?A?                T                  ?o?                       U                       ?8?                     ',
-'      o        o                 o                    o                                                  o  o           ',
+'      o        o                 o          _         o                                                  o  o           ',
 '                              o                    o    Dd             o                                                ',
 '   p , , E    ,  ,        S E      S              E     []   S            E       S               E             F       ',
 '###################   ##################   ####################    ###################    ##############################',
@@ -1018,7 +1051,7 @@ const LEVELS = [
 '                                                                                                                        ',
 '                                                                                                                        ',
 '                                                                                                                        ',
-'                                                                          oo                     ooo                    ',
+'                                                                         Zoo                     ooo                    ',
 '                                                                         ####                    ####                   ',
 '                                                                  V                                                     ',
 '                                Io?             oooo                              T                     U               ',
@@ -1076,7 +1109,7 @@ const LEVELS = [
 '                      AHI                         U               ?T?                                           W             ',
 '                     o   o                                                   ooo            ooo                 W             ',
 '          ooo                                                                 =                                 W oo          ',
-'   p    ,     E   ^^      K   , J   ^^^ S             E   K , J       ^^  E   =     ,             G             W    M  F     ',
+'   p    ,     E   ^^      K   , J   ^^^ S       C     E   K , J       ^^  E   =     ,             G             W    M  F     ',
 '##############################################################################################################################',
 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
   ],
@@ -1144,14 +1177,15 @@ const G = {
   grid:null, gridW:0, gridH:0,         // active map
   mainGrid:null, bonusGrid:null,
   inBonus:false,
-  enemies:[], particles:[], texts:[], pickups:[], shots:[],
+  enemies:[], particles:[], texts:[], pickups:[], shots:[], platforms:[],
+  checkpoint:null,
   camX:0, camY:0, camShake:0,
   score:0, stars:0, totalStars:0, lives:5, hearts:3,
   flagX:0, flagY:0,
   stateTimer:0,
   pauseTip:'',
-  stats:{ bonks:0, stars:0, deaths:0, tacos:0, secrets:0, toots:0, kings:0, mums:0 },
-  mum:null,
+  stats:{ bonks:0, stars:0, deaths:0, tacos:0, secrets:0, toots:0, kings:0, mums:0, sooties:0 },
+  mum:null, sootie:null,
   selIdx:0,
   // easter egg flags
   bigHead:false, rainbow:false, mumLoveT:0,
@@ -1261,7 +1295,8 @@ function loadLevel(idx, keepScore=true){
   G.bonusGrid = L.bonus ? parseMap(L.bonus).grid : null;
   G.inBonus = false;
   G.grid = G.mainGrid; G.gridW = m.w; G.gridH = m.h;
-  G.enemies = []; G.particles = []; G.texts = []; G.pickups = []; G.shots = []; G.mum = null;
+  G.enemies = []; G.particles = []; G.texts = []; G.pickups = []; G.shots = []; G.platforms = []; G.mum = null; G.sootie = null;
+  if (keepScore) G.checkpoint = null;               // fresh entry: forget the old checkpoint
   G.stars = 0; G.totalStars = 0; G.hearts = 3;
   G.camX = 0; G.camY = 0;
   player.vx = 0; player.vy = 0; player.inv = 0; player.tacoTimer = 0;
@@ -1280,6 +1315,8 @@ function loadLevel(idx, keepScore=true){
       else if (ch === 'R'){ G.enemies.push(makeRoly(c*TILE+3, (r+1)*TILE)); grid[r][c]=' '; }
       else if (ch === 'G'){ G.enemies.push(makeKing(c*TILE-6, (r+1)*TILE)); grid[r][c]=' '; }
       else if (ch === 'M'){ G.mum = { x:c*TILE+4, y:(r+1)*TILE - 32, saved:false, animT:0 }; grid[r][c]=' '; }
+      else if (ch === '~' || ch === '_'){ G.platforms.push({ x0:c*TILE, y0:r*TILE, x:c*TILE, y:r*TILE, w:TILE*3, h:14, axis: ch === '~' ? 'h' : 'v', t:Math.random()*6 }); grid[r][c]=' '; }
+      else if (ch === 'Z'){ G.sootie = { x:c*TILE+6, y:(r+1)*TILE - 20, saved:false, animT:Math.random()*5 }; grid[r][c]=' '; }
       else if (ch === 'o' || ch === '?'){ G.totalStars++; }   // '?' blocks pop a star too
       else if (ch === '8'){ G.totalStars += 10; }             // rainbow box pays out 10
       else if (ch === 'F'){ G.flagX = c; G.flagY = r; }
@@ -1290,13 +1327,17 @@ function loadLevel(idx, keepScore=true){
     for (const row of G.bonusGrid) for (const ch of row) if (ch === 'o' || ch === '?') G.totalStars++;
   }
   startMusic(L.music);
+  if (!keepScore && G.checkpoint){   // retry: respawn at the checkpoint flag
+    player.x = G.checkpoint.c*TILE + 6; player.y = (G.checkpoint.r+1)*TILE - player.h;
+    G.camX = Math.max(0, Math.min(G.gridW*TILE - W, player.x - W/2));
+  }
   if (L.secret){ G.rainbow = true; announce('🌈 WELCOME TO THE STAR ROAD! 🌈', 3); }
   G.state = 'STARTCARD'; G.stateTimer = 1.6;
 }
 function startRun(idx){
   setPower('small');
   G.score = 0; G.lives = 5; G.foundSecret = false;
-  G.stats = { bonks:0, stars:0, deaths:0, tacos:0, secrets:0, toots:0, kings:0, mums:0 };
+  G.stats = { bonks:0, stars:0, deaths:0, tacos:0, secrets:0, toots:0, kings:0, mums:0, sooties:0 };
   loadLevel(idx);
 }
 function makeGrumblin(x, footY){
@@ -1442,8 +1483,11 @@ function updatePlayer(dt){
     if (p.vx > 0) p.vx = Math.max(0, p.vx - fr);
     else if (p.vx < 0) p.vx = Math.min(0, p.vx + fr);
   }
-  const maxs = MAX_SPD * speedMul;
+  const maxs = MAX_SPD * speedMul * (keys.fire ? 1.3 : 1);   // hold X/B = run, Mario-style
   p.vx = Math.max(-maxs, Math.min(maxs, p.vx));
+  // skid dust when reversing at speed
+  if (p.onGround && ((wantLeft && p.vx > 130) || (wantRight && p.vx < -130)) && Math.random() < dt*25)
+    puff(p.x + p.w/2, p.y + p.h, 'rgba(230,230,230,0.8)', 2, 40);
 
   // jump buffering + coyote
   p.coyote = p.onGround ? COYOTE : Math.max(0, p.coyote - dt);
@@ -1473,6 +1517,20 @@ function updatePlayer(dt){
   const fallV = p.vy;
   const bumps = moveAndCollide(p, dt, true);
   for (const b of bumps) headBump(b);
+  // moving platforms: one-way landing on the top face
+  // ponytail: an 18px catch window — a clamped slow frame at max fall speed can drop through; widen if it ever shows up
+  p.riding = null;
+  if (!G.inBonus && p.vy >= 0){
+    for (const pl of G.platforms){
+      if (p.x + p.w > pl.x + 3 && p.x < pl.x + pl.w - 3){
+        const feet = p.y + p.h;
+        if (feet >= pl.y - 4 && feet <= pl.y + 14){
+          p.y = pl.y - p.h; p.vy = 0; p.onGround = true; p.groundTile = '~'; p.riding = pl;
+          break;
+        }
+      }
+    }
+  }
   // grew under a low ceiling? pop back to small instead of wedging forever
   if (p.power !== 'small'){
     const hr = Math.floor(p.y / TILE);
@@ -1570,6 +1628,10 @@ function updatePlayer(dt){
     } else if (ch === '^'){
       // spike hitbox: lower half of tile
       if (p.y + p.h > r*TILE + 14) hurtPlayer(c*TILE + TILE/2);
+    } else if (ch === 'C' && (!G.checkpoint || G.checkpoint.c !== c || G.checkpoint.r !== r)){
+      G.checkpoint = { c, r };
+      SFX.oneup(); announce('CHECKPOINT!');
+      confetti(c*TILE + 16 - G.camX, r*TILE - G.camY, 25);
     }
   }
 
@@ -1596,7 +1658,7 @@ function updatePlayer(dt){
       G.pickups.splice(i,1);
       if (it.kind === 'taco'){
         p.tacoTimer = 8; G.stats.tacos++;
-        SFX.taco(); announce('TACO TIME! ZOOM ZOOM!');
+        SFX.taco(); announce('TACO TIME! ZOOM ZOOM! UNSTOPPABLE!');
         addScore(500, it.x, it.y);
       } else if (it.kind === 'berry'){
         addScore(500, it.x, it.y);
@@ -1639,6 +1701,21 @@ function updatePlayer(dt){
         life:1.6, t:0, grav:-20, color:'#ff6b9d', size:4+Math.random()*3, flutter:3, heart:true });
   }
 
+  // Sootie the toy cat — find him and he rides on Orion's head
+  if (G.sootie && !G.inBonus){
+    G.sootie.animT += dt;
+    // audio hint: an occasional mew when Orion is within ~a screen of him
+    if (!G.sootie.saved && Math.abs(G.sootie.x - p.x) < W && Math.random() < dt*0.15) SFX.meow();
+    if (!G.sootie.saved && rectsOverlap(p.x, p.y, p.w, p.h, G.sootie.x, G.sootie.y, 20, 20)){
+      G.sootie.saved = true; G.stats.sooties++;
+      SFX.meow();
+      announce('ORION FOUND SOOTIE! 🐱', 3);
+      say('Sootie! There you are!', 2.5);
+      addScore(1000, G.sootie.x, G.sootie.y - 12);
+      confetti(G.sootie.x + 10 - G.camX, G.sootie.y - G.camY, 40);
+    }
+  }
+
   // animation
   p.anim += dt * (Math.abs(p.vx) / 40 + 4);
 }
@@ -1674,13 +1751,13 @@ function hurtPlayer(fromX){
   p.vy = -340; p.jumping = false;
   p.vx = (p.x + p.w/2 < fromX ? -1 : 1) * 240;
   G.camShake = 0.25;
-  if (G.hearts <= 0) die(false);
+  if (G.hearts <= 0) die();
 }
 function pitDeath(){
   announce(PIT_QUIPS[Math.floor(Math.random()*PIT_QUIPS.length)]);
-  die(true);
+  die();
 }
-function die(isPit){
+function die(){
   setPower('small');
   G.stats.deaths++;
   G.lives--;
@@ -1692,7 +1769,12 @@ function levelClear(){
   G.state = 'CLEAR'; G.stateTimer = 0;
   stopMusic(); SFX.flag();
   player.vx = 0; player.vy = 0;
-  G.score += 1000;
+  // grab the flag higher up the pole for a bigger bonus (pole is 7 tiles tall)
+  const poleFrac = Math.max(0, Math.min(1, (G.flagY*TILE - (player.y + player.h)) / (6.5*TILE)));
+  const poleBonus = 100 * Math.round(poleFrac * 10);
+  G.score += 1000 + poleBonus;
+  if (poleBonus > 0) addText(G.flagX*TILE + 16, player.y - 12, 'POLE BONUS +' + poleBonus + '!', '#7bff7b', 16, 2.2);
+  if (poleBonus >= 900){ announce('TOP OF THE FLAG! WOW!'); confetti(G.flagX*TILE + 16 - G.camX, player.y - G.camY, 60); }
   save.beaten[G.levelIdx] = true;
   if (G.stars >= G.totalStars && G.totalStars > 0) save.champs[G.levelIdx] = true;
   save.unlocked = Math.max(save.unlocked, Math.min(G.levelIdx + 1, SECRET_IDX - 1)); // Star Road unlocks by champs, not progression
@@ -1732,6 +1814,28 @@ function finishPipeTravel(){
   }
   G.camX = Math.max(0, Math.min(G.gridW*TILE - W, player.x - W/2));
   G.camY = (G.gridH*TILE <= H) ? G.gridH*TILE - H : 0;  // match updateCamera's short-map framing — no snap
+}
+
+/* ================= MOVING PLATFORMS ================= */
+function updatePlatforms(dt){
+  if (G.inBonus) return;
+  const p = player;
+  for (const pl of G.platforms){
+    pl.t += dt;
+    const off = Math.sin(pl.t * 1.4) * (pl.axis === 'h' ? 96 : 72);
+    const nx = pl.axis === 'h' ? pl.x0 + off : pl.x0;
+    const ny = pl.axis === 'v' ? pl.y0 + off : pl.y0;
+    if (p.riding === pl){ p.x += nx - pl.x; p.y = ny - p.h; }  // carry the rider
+    pl.x = nx; pl.y = ny;
+  }
+}
+function drawPlatforms(pal){
+  if (G.inBonus) return;
+  for (const pl of G.platforms){
+    ctx.fillStyle = pal.ground; ctx.fillRect(pl.x, pl.y, pl.w, pl.h);
+    ctx.fillStyle = pal.groundTop; ctx.fillRect(pl.x, pl.y, pl.w, 5);
+    ctx.fillStyle = 'rgba(0,0,0,0.2)'; ctx.fillRect(pl.x+4, pl.y+pl.h-3, pl.w-8, 3);
+  }
 }
 
 /* ================= ENEMIES ================= */
@@ -1850,7 +1954,14 @@ function updateEnemies(dt){
     // player collision
     if (rectsOverlap(p.x, p.y, p.w, p.h, e.x, e.y, e.w, e.h)){
       const stomping = p.vy > 0 && (p.y + p.h - e.y) < 16;
-      if (e.kind === 'prickle'){
+      if (p.tacoTimer > 0 && e.kind !== 'king'){
+        // taco = invincibility star: ram straight through anything (except royalty)
+        e.frozenT = 0; e.squash = 0.5; G.stats.bonks++;
+        addScore(300, e.x, e.y - 10);
+        SFX.stomp(); G.camShake = Math.max(G.camShake, 0.1);
+        puff(e.x + e.w/2, e.y + e.h/2, '#ffd23e', 8, 100);
+      }
+      else if (e.kind === 'prickle'){
         if (p.inv <= 0){
           hurtPlayer(e.x + e.w/2);
           if (stomping) say(PRICKLE_QUIPS[Math.floor(Math.random()*PRICKLE_QUIPS.length)], 1.4);
@@ -2014,6 +2125,7 @@ function update(dt){
     case 'PLAY':
       if (justDown.pause){ G.state = 'PAUSE'; G.pauseTip = PAUSE_TIPS[Math.floor(Math.random()*PAUSE_TIPS.length)]; break; }
       if (justDown.restart){ loadLevel(G.levelIdx, false); break; }
+      updatePlatforms(dt);
       updatePlayer(dt);
       if (G.state !== 'PLAY') break;  // state may have changed (clear/death/pipe)
       updateEnemies(dt);
@@ -2025,6 +2137,7 @@ function update(dt){
       break;
     case 'PAUSE':
       if (justDown.pause || justDown.enter) G.state = 'PLAY';
+      else if (justDown.down){ G.state = 'SELECT'; stopMusic(); SFX.pop(); }  // quit to level map
       break;
     case 'PIPE': {
       const a = G.pipeAnim;
@@ -2082,7 +2195,7 @@ function update(dt){
   }
 }
 function updateCamera(dt){
-  const targetX = player.x + player.w/2 - W/2;
+  const targetX = player.x + player.w/2 - W/2 + player.facing*70;  // look ahead of the run
   const targetY = player.y + player.h/2 - H/2 - 40;
   G.camX += (targetX - G.camX) * Math.min(1, dt*8);
   G.camY += (targetY - G.camY) * Math.min(1, dt*6);
@@ -2125,6 +2238,7 @@ function draw(){
   ctx.save();
   ctx.translate(-camX, -camY);
   drawTiles(pal, camX, camY);
+  drawPlatforms(pal);
   drawPickups();
   drawMum();
   drawEnemies();
@@ -2137,6 +2251,7 @@ function draw(){
       ctx.clip(); drawPlayer(); ctx.restore();
     } else drawPlayer();
   }
+  drawSootie();
   drawParticles();
   drawFloatingTexts();
   drawBubble();
@@ -2339,6 +2454,18 @@ function drawTiles(pal, camX, camY){
           if (Math.random() < 0.008) sparkle(x + Math.random()*TILE, y + Math.random()*TILE, '#c9b26a');
           break;
         }
+        case 'C': {
+          // checkpoint flag: grey until touched, green once active
+          const active = G.checkpoint && G.checkpoint.c === c && G.checkpoint.r === r;
+          ctx.fillStyle = '#cfd8dc'; ctx.fillRect(x+14, y-20, 4, TILE+20);
+          ctx.fillStyle = active ? '#7bff7b' : '#8a93a0';
+          const wave = Math.sin(G.time*4 + c)*2;
+          ctx.beginPath();
+          ctx.moveTo(x+18, y-18); ctx.lineTo(x+34+wave, y-11); ctx.lineTo(x+18, y-4);
+          ctx.closePath(); ctx.fill();
+          if (active && Math.random() < 0.02) sparkle(x+16, y-14, '#7bff7b');
+          break;
+        }
         case 'F': drawFlag(x, y); break;
         case ',': drawDeco(x, y, pal, c); break;
       }
@@ -2477,6 +2604,26 @@ function drawMum(){
     ctx.font = 'bold 12px monospace'; ctx.textAlign = 'center';
     ctx.fillStyle = 'rgba(255,255,255,0.9)';
     ctx.fillText('MUM!', m.x + 12, m.y - 10 + Math.sin(m.animT*4)*2);
+  }
+}
+function drawSootie(){
+  if (!G.sootie || G.inBonus || G.state === 'GAMEOVER') return;
+  const s = G.sootie;
+  const img = Math.floor(s.animT*2)%2 ? sprites.sootie.sit1 : sprites.sootie.sit2;
+  if (s.saved){
+    // rides on Orion's head for the rest of the level
+    const p = player;
+    const hy = p.y - 8 + Math.sin(G.time*6)*1.5 - (p.power !== 'small' ? 8 : 0);
+    ctx.save();
+    ctx.translate(p.x + p.w/2, hy);
+    if (p.facing < 0) ctx.scale(-1, 1);
+    ctx.drawImage(img, -img.width/2, -img.height);
+    ctx.restore();
+  } else {
+    ctx.drawImage(img, s.x, s.y + Math.sin(s.animT*3)*1.5);
+    ctx.font = 'bold 11px monospace'; ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.fillText('mew!', s.x + 10, s.y - 8 + Math.sin(s.animT*4)*2);
   }
 }
 function drawPlayer(){
@@ -2667,7 +2814,7 @@ function drawTitle(){
     bigText('Beaten ' + save.beaten.slice(0, SECRET_IDX).filter(Boolean).length + '/' + SECRET_IDX +
             (save.bestScore ? '    Best score ' + save.bestScore : ''), 352, 14, '#ffd23e');
   }
-  bigText('← → / A D move    SPACE / ↑ jump    ↓ duck    X shoot', 380, 15, '#e8d9ff');
+  bigText('← → / A D move    SPACE / ↑ jump    ↓ duck    X shoot (hold = RUN!)', 380, 15, '#e8d9ff');
   bigText('P pause    M music    R restart    F fullscreen', 408, 15, '#e8d9ff');
   bigText('Psst… try standing still for a while. Or typing things…', 450, 13, '#c9b6ee');
 }
@@ -2750,7 +2897,7 @@ function drawPause(){
   overlay(0.55);
   bigText('PAUSED', H/2 - 50, 48, '#ffd23e');
   bigText(G.pauseTip, H/2 + 10, 18, '#fff');
-  bigText('P or ENTER to resume', H/2 + 60, 16, '#bbb');
+  bigText('P / ESC / ENTER resume        ↓ quit to level map', H/2 + 60, 16, '#bbb');
 }
 function drawClear(L){
   if (G.stateTimer < 1) return;
@@ -2790,12 +2937,13 @@ function drawWin(){
     ['Secrets found', s.secrets],
     ['Dads dethroned', s.kings],
     ['Mums rescued', s.mums],
+    ['Sooties found', s.sooties],
     ['Gravity lessons learned', s.deaths],
     ['Mysterious toots', s.toots],
   ];
   ctx.font = 'bold 19px monospace';
   lines.forEach((ln, i)=>{
-    const y = 248 + i*26;
+    const y = 246 + i*24;   // 9 stat lines have to clear FINAL SCORE at y=460
     ctx.textAlign = 'right'; ctx.fillStyle = '#cfc3f0';
     ctx.fillText(ln[0] + ' ', W/2 + 40, y);
     ctx.textAlign = 'left'; ctx.fillStyle = '#ffd23e';

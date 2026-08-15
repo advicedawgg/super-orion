@@ -58,7 +58,13 @@ If the checker prints `[FAIL]` lines, fix the placements in `levelgen-work.js`, 
 'G' KING DAD boss (3 stomps to defeat; hops toward player, angrier each hit; max ONE per level)
 'W' castle gate (solid until the 'G' boss is defeated, then crumbles — checker treats it as OPEN, but a 'W' without a 'G' in the level is an instant FAIL)
 'M' Mum (rescue NPC — walk into her after the gate falls; max ONE per level; needs floor below like enemies)
+'~' moving platform, horizontal (3 tiles wide, sweeps ±96px / ±3 cols around its marker)
+'_' moving platform, vertical (3 tiles wide, bobs ±72px / ±2.25 rows around its marker)
+'C' checkpoint flag (non-solid; dying respawns the player here; cleared on fresh level entry)
+'Z' Sootie the toy cat (rescue NPC — rides Orion's head once touched; needs floor below like enemies)
 ```
+
+**Moving-platform rule:** the checker treats `~`/`_` as AIR. Reachability of every star, block, pipe and the flag must NEVER depend on a moving platform — they are bonus routes only. Keep 1 row of clear headroom above a mover's whole sweep (solid tiles above the sweep shove the rider around).
 
 ## Quirks that break levels if ignored
 
