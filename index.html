@@ -80,9 +80,10 @@
   <p class="sub">CHOOSE YOUR ADVENTURE</p>
 
   <nav class="cards">
-    <!-- ./1 not ./1.html: the Worker 307s .html to the extensionless path,
-         and there's no reason to spend a round-trip on that. -->
-    <a class="card" href="./1">
+    <!-- ./1.html, not ./1: live the Worker 307s it to the extensionless path
+         (one cheap redirect), and the Steam Deck's offline mirror — a plain
+         static server with no rewrites — can only find the real filename. -->
+    <a class="card" href="./1.html">
       <div class="shot">
         <span class="badge">THE ORIGINAL</span>
         <img src="./art/card1.jpg" alt="" width="920" height="430" loading="eager">
@@ -95,7 +96,7 @@
       </div>
     </a>
 
-    <a class="card" href="https://orion2.advicedawg.com">
+    <a class="card" id="game2" href="https://orion2.advicedawg.com">
       <div class="shot">
         <span class="badge two">NEW</span>
         <img src="./art/card2.jpg" alt="" width="920" height="513" loading="eager">
@@ -113,6 +114,11 @@
 </main>
 
 <script>
+// The Steam Deck serves an offline mirror of both games off 127.0.0.1, where
+// game 2 sits at ./2/ instead of on its own domain. Same test guards the
+// "◀ GAMES" link inside both games.
+if (location.hostname === '127.0.0.1') game2.href = './2/';
+
 // Starfield — deterministic, so it doesn't reshuffle on every visit.
 {
   const el = document.getElementById('stars');
