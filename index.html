@@ -82,7 +82,7 @@ window.addEventListener('keydown', e=>{
       typedBuffer = (typedBuffer + e.key.toLowerCase()).slice(-10);
       if (typedBuffer.endsWith('orion')) triggerRainbow();
       if (typedBuffer.endsWith('taco'))  triggerFreeTaco();
-      if (typedBuffer.endsWith('dad'))   triggerDadJoke();
+      if (typedBuffer.endsWith('joke'))  triggerDadJoke();   // NOT 'dad' — d-a-d is just left/right/left on WASD
       if (typedBuffer.endsWith('love'))  triggerMumLove();   // 'mum' would hit the M mute key twice
     }
     const a = KEYMAP[e.code];
@@ -846,8 +846,8 @@ const LEVELS = [
 '                                       o o o o                                                                                ',
 '                                                                                                                              ',
 '                                      ########                                                                                ',
-'                                      V                                                                                       ',
-'                                                                          V          ooo                                      ',
+'                                                                          V                                                   ',
+'                                      V                                              ooo                                      ',
 '                                                  ####            ooo    ####       ####                                      ',
 '                ####       AoHT                                                                                               ',
 '                                                                                             o                                ',
@@ -940,11 +940,11 @@ const LEVELS = [
 '                                         oo                                                                             ',
 '                       ooo                                      oo                     oo                               ',
 '                                         =S                     =S                                                      ',
-'                       ===                                                             == V                             ',
-'        ?A?              T                    ?o?                       U                       ?8?                     ',
+'                       ===                                                             ==   V                           ',
+'        ?A?                T                  ?o?                       U                       ?8?                     ',
 '      o        o                 o                    o                                                  o  o           ',
 '                              o                    o    Dd             o                                                ',
-'   p , , E    ,  ,        S E      S              E          S            E       S               E             F       ',
+'   p , , E    ,  ,        S E      S              E     []   S            E       S               E             F       ',
 '###################   ##################   ####################    ###################    ##############################',
 'xxxxxxxxxxxxxxxxxxx   xxxxxxxxxxxxxxxxxx   xxxxxxxxxxxxxxxxxxxx    xxxxxxxxxxxxxxxxxxx    xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
   ],
