@@ -19,10 +19,17 @@
   #tLeft{left:4vw;} #tRight{left:calc(4vw + 18vmin + 12px);} #tJump{right:4vw;width:20vmin;height:20vmin;} #tDown{right:calc(4vw + 20vmin + 12px);}
   #tFire{right:4vw;bottom:calc(6vh + 20vmin);width:14vmin;height:14vmin;}
   #tFull{top:8px;right:8px;bottom:auto;width:9vmin;height:9vmin;min-width:44px;min-height:44px;font-size:4vmin;display:none;}
+  /* Way back to the launcher. Top-LEFT so it never fights the fullscreen
+     button, and small enough to sit in the letterbox beside the canvas. */
+  #quit{position:fixed;left:8px;top:8px;z-index:11;font:bold 12px system-ui,sans-serif;
+    letter-spacing:.1em;color:#9fb4ff;text-decoration:none;background:rgba(35,46,92,.85);
+    border:2px solid #3d4d8f;border-radius:6px;padding:6px 10px;}
+  #quit:hover{border-color:#ffd23f;color:#fff6e0;}
 </style>
 </head>
 <body>
 <div id="wrap"><canvas id="cv" width="960" height="540"></canvas></div>
+<a id="quit" href="https://orion.advicedawg.com/">◀ GAMES</a>
 <div id="touch">
   <div class="tbtn" id="tLeft">◀</div>
   <div class="tbtn" id="tRight">▶</div>
