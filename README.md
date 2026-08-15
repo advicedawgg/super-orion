@@ -54,7 +54,7 @@ Or just play it anywhere: **https://orion.advicedawg.com**
 | 🌈 **Rainbow Mode** | Type the letters `O-R-I-O-N` on the keyboard any time. Rainbow trail! Type it again to turn off. |
 | 🧠 **Big Brain Mode** | The Konami code: ↑ ↑ ↓ ↓ ← → ← → B A. Giant head. |
 | 🌮 **Taco Power** | Hidden in special `?` blocks — super speed! Also try *typing* `taco`... |
-| 👨 **Dad Joke** | Type `dad` any time. King Dad delivers. You cannot stop him. |
+| 👨 **Dad Joke** | Type `joke` any time. King Dad delivers. You cannot stop him. |
 | 💕 **Mum's Love** | Type `love` while playing — Mum refills your hearts! (She needs a breather between rescues: ~40s) |
 | 🌈 **The ????? card** | There's a mysterious card on the level select screen. Earn the ⭐ Star Champion badge (collect *every* star) on **all 10 levels** and… a rainbow road appears. |
 | 🤭 **The Toot** | Press duck (↓) 5 times quickly. "Oops. Beans for breakfast." |
