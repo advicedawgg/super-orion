@@ -1183,7 +1183,7 @@ const G = {
   inBonus:false,
   enemies:[], particles:[], texts:[], pickups:[], shots:[], platforms:[],
   checkpoint:null,
-  camX:0, camY:0, camShake:0,
+  camX:0, camY:0, camShake:0, lookX:0,
   score:0, stars:0, totalStars:0, lives:5, hearts:3,
   flagX:0, flagY:0,
   stateTimer:0,
@@ -1302,7 +1302,7 @@ function loadLevel(idx, keepScore=true){
   G.enemies = []; G.particles = []; G.texts = []; G.pickups = []; G.shots = []; G.platforms = []; G.mum = null; G.sootie = null;
   if (keepScore) G.checkpoint = null;               // fresh entry: forget the old checkpoint
   G.stars = 0; G.totalStars = 0; G.hearts = 3;
-  G.camX = 0; G.camY = 0;
+  G.camX = 0; G.camY = 0; G.lookX = 0;
   player.vx = 0; player.vy = 0; player.inv = 0; player.tacoTimer = 0;
   player.idleTime = 0; player.dancing = false; player.stompChain = 0;
   G.msgTimer = 0; G.msgText = ''; G.camShake = 0;
@@ -2201,7 +2201,10 @@ function update(dt){
   }
 }
 function updateCamera(dt){
-  const targetX = player.x + player.w/2 - W/2 + player.facing*70;  // look ahead of the run
+  // lookahead scales with speed (0 idle → ~95px at full run) and eases slowly, so
+  // quick back-and-forth turns swing gently instead of snapping ±70px per flip
+  G.lookX += (player.vx * 0.28 - G.lookX) * Math.min(1, dt*3);
+  const targetX = player.x + player.w/2 - W/2 + G.lookX;
   const targetY = player.y + player.h/2 - H/2 - 40;
   G.camX += (targetX - G.camX) * Math.min(1, dt*8);
   G.camY += (targetY - G.camY) * Math.min(1, dt*6);
