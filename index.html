@@ -87,6 +87,8 @@ window.addEventListener('keydown', e=>{
     }
     const a = KEYMAP[e.code];
     if (a && !(a === 'restart' && typedBuffer.endsWith('or'))){ keys[a] = true; justDown[a] = true; }
+    // ↑/W double as 'up' so menus can tell them apart from Space (both map to 'jump')
+    if (e.code === 'ArrowUp' || e.code === 'KeyW') justDown.up = true;
     // konami detector (KMP failure transition: Up,Up prefix survives extra Ups)
     if (e.code === KONAMI[konamiIdx]){ konamiIdx++; if (konamiIdx >= KONAMI.length){ konamiIdx = 0; triggerBigHead(); } }
     else konamiIdx = (e.code === 'ArrowUp') ? (konamiIdx === 2 ? 2 : 1) : 0;
@@ -151,6 +153,8 @@ function pollGamepad(){
     left:  b(14) || ax(0) < -0.35,
     right: b(15) || ax(0) >  0.35,
     down:  b(13) || ax(1) >  0.5,
+    up:    b(12) || ax(1) < -0.5,   // menu navigation only
+
     jump:  b(0)  || b(1),
     fire:  b(2)  || b(3),
     enter: b(9),
@@ -2111,8 +2115,10 @@ function update(dt){
       if (G.msgTimer > 0) G.msgTimer -= dt;
       if (justDown.left){  G.selIdx = (G.selIdx + LEVELS.length - 1) % LEVELS.length; SFX.pop(); }
       if (justDown.right){ G.selIdx = (G.selIdx + 1) % LEVELS.length; SFX.pop(); }
+      if (justDown.up   && G.selIdx >= 6){ G.selIdx -= 6; SFX.pop(); }                              // rows are 6 cards wide
+      if (justDown.down && G.selIdx <  6){ G.selIdx = Math.min(G.selIdx + 6, LEVELS.length - 1); SFX.pop(); }
       if (justDown.pause){ G.state = 'TITLE'; break; }
-      if (justDown.enter || justDown.jump){
+      if (justDown.enter || (justDown.jump && !justDown.up)){
         if (canPlayLevel(G.selIdx)) startRun(G.selIdx);
         else if (LEVELS[G.selIdx].secret){ SFX.bump(); announce('Collect ⭐ on ALL ' + SECRET_IDX + ' levels to unlock!', 2); }
         else { SFX.bump(); announce('Locked! Beat the level before it.', 1.5); }
@@ -2881,7 +2887,7 @@ function drawSelect(){
     : selL.secret ? 'Collect ⭐ on ALL ' + SECRET_IDX + ' levels to open this…'
     : 'Beat the level before this one!';
   bigText(banner, 428, 22, canPlay ? '#fff' : '#ff9d9d');
-  if (Math.floor(G.time*1.6)%2 === 0) bigText('← → pick    ENTER / tap to play    P back', 468, 16, '#e8d9ff');
+  if (Math.floor(G.time*1.6)%2 === 0) bigText('← → ↑ ↓ pick    ENTER / tap to play    P back', 468, 16, '#e8d9ff');
   const done = save.beaten.slice(0, SECRET_IDX).filter(Boolean).length;
   const champs = champCount();
   bigText('Beaten ' + done + '/' + SECRET_IDX + '    ⭐ Star Champion ' + champs + '/' + SECRET_IDX +
