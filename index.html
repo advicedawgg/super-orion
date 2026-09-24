@@ -27,7 +27,8 @@
 
   .wrap{width:min(1000px,100%);text-align:center;position:relative}
   /* Sized so the whole menu fits a Steam Deck screen (1280x800) unscrolled. */
-  .logo{width:min(470px,74%);height:auto;display:block;margin:0 auto;
+  /* Three cards now: the logo caps at 20vh so the Deck still fits it all unscrolled. */
+  .logo{width:auto;max-width:min(470px,74%);max-height:20vh;height:auto;display:block;margin:0 auto;
         filter:drop-shadow(0 8px 18px rgba(0,0,0,.55))}
   .sub{margin-top:1.1em;letter-spacing:.36em;font-size:clamp(10px,1.9vmin,14px);color:#a99ae8}
 
@@ -55,6 +56,7 @@
     background:var(--ember);color:#2a0f00;border-radius:99px;padding:.35em .85em;
     box-shadow:0 3px 0 rgba(0,0,0,.35)}
   .badge.two{background:var(--pop);color:#3a000c}
+  .badge.three{background:var(--gold);color:#3a2400}
 
   .body{padding:clamp(14px,2.4vmin,22px) clamp(16px,2.8vmin,26px) clamp(18px,3vmin,26px);text-align:left}
   .no{font-size:clamp(11px,1.7vmin,13px);letter-spacing:.2em;color:var(--gold)}
@@ -98,7 +100,7 @@
 
     <a class="card" id="game2" href="https://orion2.advicedawg.com">
       <div class="shot">
-        <span class="badge two">NEW</span>
+        <span class="badge two">THE SEQUEL</span>
         <img src="./art/card2.jpg" alt="" width="920" height="513" loading="eager">
       </div>
       <div class="body">
@@ -106,6 +108,18 @@
         <div class="name">Cosmic Cannonball</div>
         <p class="tag">The sequel, in full 3D. Spin, stomp and double-jump across jungle canyons and crumbling coastlines.</p>
         <div class="chips"><span class="chip">3D</span><span class="chip">SPIN ATTACK</span><span class="chip">DOUBLE JUMP</span></div>
+      </div>
+    </a>
+    <a class="card" id="game3" href="https://orion3.advicedawg.com">
+      <div class="shot">
+        <span class="badge three">NEW</span>
+        <img src="./art/card3.jpg" alt="" width="920" height="430" loading="eager">
+      </div>
+      <div class="body">
+        <div class="no">GAME THREE</div>
+        <div class="name">Orion Team Racing</div>
+        <p class="tag">Kart racing! Power-slide for triple turbos, zap the family with taco bombs and win the Orion Cup.</p>
+        <div class="chips"><span class="chip">3D</span><span class="chip">5 TRACKS</span><span class="chip">2 PLAYERS</span></div>
       </div>
     </a>
   </nav>
