@@ -71,6 +71,10 @@
   kbd{background:#3a2780;border:1px solid var(--edge);border-bottom-width:3px;border-radius:.4em;
       padding:.2em .5em;font:inherit;font-size:.92em;color:#e6dcff}
 
+  .credit{position:absolute;top:100%;left:0;right:0;margin-top:.9em;font-weight:600;font-size:clamp(10px,1.5vmin,12px);letter-spacing:.08em;color:#8878c8}
+  .credit a{color:#c3b6f0;text-decoration:none;border-bottom:1px solid var(--edge)}
+  .credit a:hover,.credit a:focus-visible{color:var(--gold);border-color:var(--gold);outline:none}
+
   @media (prefers-reduced-motion:reduce){ .stars i{animation:none} a.card{transition:none} }
 </style>
 </head>
@@ -125,6 +129,7 @@
   </nav>
 
   <p class="foot"><kbd>← →</kbd> choose · <kbd>ENTER</kbd> play · or just tap a card</p>
+  <p class="credit">Made in the Whitsundays by <a href="https://byt.tools/">byt.tools</a></p>
 </main>
 
 <script>
